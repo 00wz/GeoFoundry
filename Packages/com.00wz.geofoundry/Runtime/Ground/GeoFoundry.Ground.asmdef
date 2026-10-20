@@ -1,0 +1,19 @@
+{
+    "name": "GeoFoundry.Ground",
+    "rootNamespace": "GeoFoundry.Ground",
+    "references": [
+        "GeoFoundry.Core",
+        "Unity.Burst",
+        "Unity.Collections",
+        "Unity.Mathematics"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

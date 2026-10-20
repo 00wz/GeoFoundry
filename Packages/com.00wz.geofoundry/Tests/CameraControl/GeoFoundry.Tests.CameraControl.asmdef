@@ -1,0 +1,33 @@
+{
+    "name": "GeoFoundry.Tests.CameraControl",
+    "rootNamespace": "GeoFoundry.Tests.CameraControl",
+    "references": [
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "GeoFoundry.Core",
+        "GeoFoundry.CameraControl",
+        "Unity.Mathematics"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "GEOFOUNDRY_INPUT_SYSTEM"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.inputsystem",
+            "expression": "1.0.0",
+            "define": "GEOFOUNDRY_INPUT_SYSTEM"
+        }
+    ],
+    "noEngineReferences": false
+}

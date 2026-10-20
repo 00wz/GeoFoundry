@@ -1,0 +1,54 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Unity YAML: merged with UnityYAMLMerge (Smart Merge) if the unityyamlmerge driver is configured in git config;
+# otherwise git merges these files as plain text.
+*.unity merge=unityyamlmerge text
+*.prefab merge=unityyamlmerge text
+*.asset merge=unityyamlmerge text
+*.mat merge=unityyamlmerge text
+*.anim merge=unityyamlmerge text
+*.controller merge=unityyamlmerge text
+*.overrideController merge=unityyamlmerge text
+*.physicMaterial merge=unityyamlmerge text
+*.physicsMaterial2D merge=unityyamlmerge text
+*.playable merge=unityyamlmerge text
+*.mask merge=unityyamlmerge text
+*.brush merge=unityyamlmerge text
+*.flare merge=unityyamlmerge text
+*.fontsettings merge=unityyamlmerge text
+*.guiskin merge=unityyamlmerge text
+*.giparams merge=unityyamlmerge text
+*.renderTexture merge=unityyamlmerge text
+*.spriteatlas merge=unityyamlmerge text
+*.terrainlayer merge=unityyamlmerge text
+*.mixer merge=unityyamlmerge text
+*.shadervariants merge=unityyamlmerge text
+*.preset merge=unityyamlmerge text
+*.lighting merge=unityyamlmerge text
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.tga binary
+*.tif binary
+*.tiff binary
+*.psd binary
+*.exr binary
+*.hdr binary
+*.fbx binary
+*.obj binary
+*.blend binary
+*.wasm binary
+*.dll binary
+*.so binary
+*.a binary
+*.dylib binary
+*.ttf binary
+*.otf binary
+*.wav binary
+*.mp3 binary
+*.ogg binary
+*.mp4 binary
+*.bytes binary

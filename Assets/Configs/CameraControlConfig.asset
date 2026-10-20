@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: de8f46de658a852a852f4652e303d48c, type: 3}
+  m_Name: CameraControlConfig
+  m_EditorClassIdentifier: GeoFoundry.CameraControl::GeoFoundry.CameraControl.CameraControlConfig
+  MinCameraDistance: 10
+  MaxCameraDistance: 80000000
+  ZoomSpeed: 0.1
+  ZoomDampingFactor: 0.3
+  OrbitSensitivityDegPerPixel: 0.25
+  MinPitchDeg: 5
+  MaxPitchDeg: 89.99
+  GroundKeyboardSpeed: 400
+  GroundKeyboardSpeedFast: 1200
+  FreeFlightSpeed: 400
+  FreeFlightSpeedFast: 1200
+  FreeFlightRotationSensitivity: 0.0025
+  MinFreeCameraHeight: 10
+  TouchOrbitYawSensitivity: 1
+  TouchOrbitPitchSensitivity: 0.15
+  TouchZoomSensitivity: 0.003

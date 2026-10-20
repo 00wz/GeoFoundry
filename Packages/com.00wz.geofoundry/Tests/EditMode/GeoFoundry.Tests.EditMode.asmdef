@@ -1,0 +1,33 @@
+{
+    "name": "GeoFoundry.Tests.EditMode",
+    "rootNamespace": "GeoFoundry.Tests.EditMode",
+    "references": [
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "GeoFoundry.Core",
+        "GeoFoundry.TileIO",
+        "GeoFoundry.Geometry",
+        "GeoFoundry.Render",
+        "GeoFoundry.Ground",
+        "GeoFoundry.Tiles",
+        "GeoFoundry.Bootstrap",
+        "Unity.Burst",
+        "Unity.Collections",
+        "Unity.Mathematics"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

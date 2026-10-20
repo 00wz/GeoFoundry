@@ -1,0 +1,33 @@
+{
+  "name": "com.00wz.geofoundry",
+  "version": "0.1.0",
+  "displayName": "GeoFoundry",
+  "description": "Builds 3D maps from MVT vector tiles and Terrarium DEM elevation with URP, Burst and the Job System, including WebGL. The tile schema is defined by layer handlers; the built-in ones target OpenMapTiles.",
+  "unity": "6000.4",
+  "unityRelease": "8f1",
+  "keywords": [
+    "openstreetmap",
+    "osm",
+    "map",
+    "3d",
+    "mvt",
+    "vector-tiles",
+    "terrain",
+    "burst",
+    "webgl"
+  ],
+  "author": {
+    "name": "Pavel",
+    "email": "pedaracha@gmail.com"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "com.unity.burst": "1.8.26",
+    "com.unity.collections": "2.6.0",
+    "com.unity.mathematics": "1.3.2",
+    "com.unity.render-pipelines.universal": "17.4.0",
+    "com.unity.modules.unitywebrequest": "1.0.0",
+    "com.unity.modules.unitywebrequesttexture": "1.0.0",
+    "com.unity.modules.imageconversion": "1.0.0"
+  }
+}

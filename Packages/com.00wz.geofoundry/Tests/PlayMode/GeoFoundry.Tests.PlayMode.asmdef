@@ -1,0 +1,30 @@
+{
+    "name": "GeoFoundry.Tests.PlayMode",
+    "rootNamespace": "GeoFoundry.Tests.PlayMode",
+    "references": [
+        "UnityEngine.TestRunner",
+        "GeoFoundry.Core",
+        "GeoFoundry.TileIO",
+        "GeoFoundry.Geometry",
+        "GeoFoundry.Render",
+        "GeoFoundry.Ground",
+        "GeoFoundry.Tiles",
+        "GeoFoundry.Bootstrap",
+        "Unity.Burst",
+        "Unity.Collections",
+        "Unity.Mathematics"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

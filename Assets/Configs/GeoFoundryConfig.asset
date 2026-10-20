@@ -1,0 +1,41 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6a300923a028909478639f8ef10b0f5e, type: 3}
+  m_Name: GeoFoundryConfig
+  m_EditorClassIdentifier: GeoFoundry.Bootstrap::GeoFoundry.Bootstrap.GeoFoundryConfig
+  VectorTilesEndpointTemplate: http://192.168.253.55:3000/moscow/{z}/{x}/{y}
+  DemTilesEndpointTemplate: http://192.168.253.55:8000/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=/dem/dem.tif&algorithm=terrarium
+  Lod:
+    MaxTileScreenSizePixels: 133.3
+    MaxZoom: 14
+    MaxSkippedLevels: 0
+    CullBoundsHeightMargin: 1000
+    BudgetHysteresis: 0.98
+  TerrainHandler: {fileID: 11400000, guid: 9aab23954bf54524b151833191749126, type: 2}
+  LayerHandlers:
+  - {fileID: 11400000, guid: 0df4b31afab74e11908eb02f9be1acbc, type: 2}
+  - {fileID: 11400000, guid: f9b583c0d68045368521c8c28b3fc1cb, type: 2}
+  - {fileID: 11400000, guid: 5b0d6b480e904c1687121f7382b60608, type: 2}
+  - {fileID: 11400000, guid: 49b68f22165a402cbfd25626f03f9bc1, type: 2}
+  - {fileID: 11400000, guid: 1208f5099fae43b1b1c250c506e16e3e, type: 2}
+  - {fileID: 11400000, guid: 01af0ded647e476c98380a87245ac9a8, type: 2}
+  MaxConcurrentHttpRequests: 16
+  MaxConcurrentLoads: 16
+  GpuBudgetMB: 512
+  HeapBudgetMB: 256
+  OriginLongitude: 37.6175
+  OriginLatitude: 55.752
+  OriginCameraDistance: 12000
+  TerrainGridResolution: 32
+  EnableRelief: 1
+  LoadNeighborGrids: 1
+  FloatingOriginThresholdMeters: 6000
