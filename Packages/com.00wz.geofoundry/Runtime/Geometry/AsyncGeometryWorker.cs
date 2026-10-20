@@ -67,6 +67,50 @@ namespace GeoFoundry.Geometry
             return await RunSingleMeshAsync(job.Schedule(), buffers, $"Surface_{coord}", ct);
         }
 
+        /// <summary>
+        /// Builds the Polygon features listed in <paramref name="items"/> as a single <see cref="Mesh"/>, in list
+        /// order and with each item's vertex color (see <see cref="SurfaceDrawItem"/>). Lets a handler filter
+        /// features, color them by attributes and control the draw order inside the mesh (with the ZTest Always
+        /// surface shaders, later triangles cover earlier ones). <paramref name="items"/> is borrowed. Returns
+        /// <c>null</c> on cancellation or if nothing was emitted.
+        /// </summary>
+        public static async Awaitable<Mesh> BuildSurfaceMeshAsync(
+            NativeMvtLayer layer, NativeArray<SurfaceDrawItem> items, TileCoord coord, GroundGrid grid,
+            MercatorPivot localFrame, float uvScalePerMeter, CancellationToken ct)
+        {
+            JobInputs.RequireGrid(grid, nameof(grid));
+            if (!items.IsCreated || items.Length == 0) return null;
+            var buffers = GeometryBuffers.Allocate(items.Length);
+            var job = CreateSurfaceJob(layer, coord, grid, localFrame, uvScalePerMeter, default, buffers);
+            job.DrawItems = items;
+            job.UseDrawItems = true;
+            job.EmitGlobalIndices = true;
+            return await RunSingleMeshAsync(job.Schedule(), buffers, $"Surface_{coord}", ct);
+        }
+
+        // ---- Lines -------------------------------------------------------------
+
+        /// <summary>
+        /// Builds the features listed in <paramref name="items"/> as ribbons of a single <see cref="Mesh"/>, in list
+        /// order (see <see cref="LineDrawItem"/>): per-item width, vertex color, dash pattern (TexCoord1) and
+        /// optional Polygon outlines. The general-purpose line builder for schema handlers: casings, fills, dashed
+        /// rails and boundaries, outlines. <paramref name="items"/> is borrowed. Returns <c>null</c> on cancellation
+        /// or if nothing was emitted.
+        /// </summary>
+        public static async Awaitable<Mesh> BuildLineMeshAsync(
+            NativeMvtLayer layer, NativeArray<LineDrawItem> items, TileCoord coord, GroundGrid grid,
+            MercatorPivot localFrame, CancellationToken ct)
+        {
+            JobInputs.RequireGrid(grid, nameof(grid));
+            if (!items.IsCreated || items.Length == 0) return null;
+            var buffers = GeometryBuffers.Allocate(items.Length);
+            var job = CreateRoadJob(layer, null, coord, grid, localFrame, default, buffers);
+            job.DrawItems = items;
+            job.UseDrawItems = true;
+            job.EmitGlobalIndices = true;
+            return await RunSingleMeshAsync(job.Schedule(), buffers, $"Lines_{coord}", ct);
+        }
+
         // ---- Roads -------------------------------------------------------------
 
         /// <summary>
@@ -107,7 +151,7 @@ namespace GeoFoundry.Geometry
         /// Builds one mesh per Polygon feature of a building layer using <see cref="BuildingBuildJob"/>
         /// (flat-base extrusion: the per-feature terrain base is computed inside the job, and there is no way to
         /// pass in a precomputed height shared by a group of features). Not used by the default
-        /// <c>BuildingsLayerHandler</c> (OMT), see <see cref="BuildBuildingTerrainMeshesAsync"/>. Kept as a starting
+        /// <c>OmtBuildingHandler</c> (OMT), see <see cref="BuildBuildingTerrainMeshesAsync"/>. Kept as a starting
         /// point for schemas that group features (e.g. by <c>group_id</c>); both the method and the job need
         /// further work before they are usable for that, so this is not a ready-to-use alternative.
         /// The method builds geometry only: <paramref name="hidden"/>, <paramref name="topMeters"/>,
@@ -260,6 +304,7 @@ namespace GeoFoundry.Geometry
                 Rings = layer.Rings,
                 RingPoints = layer.RingPoints,
                 FeatureColors = JobInputs.PrepareFeatureColors(featureColors, buffers),
+                DrawItems = buffers.Own(new NativeArray<SurfaceDrawItem>(0, Allocator.Persistent)),
                 Coord = coord,
                 Extent = layer.Extent,
                 UvScalePerMeter = uvScalePerMeter,
@@ -279,8 +324,10 @@ namespace GeoFoundry.Geometry
             NativeMvtLayer layer, Func<NativeMvtFeature, float> widthSelector,
             TileCoord coord, GroundGrid grid, MercatorPivot localFrame, NativeArray<Color32> featureColors, GeometryBuffers buffers)
         {
+            // Draw-list mode passes no selector: the widths come from the items.
             var widths = buffers.Own(new NativeArray<float>(math.max(1, layer.FeatureCount), Allocator.Persistent));
-            for (int i = 0; i < layer.FeatureCount; i++) widths[i] = widthSelector(layer.Features[i]);
+            if (widthSelector != null)
+                for (int i = 0; i < layer.FeatureCount; i++) widths[i] = widthSelector(layer.Features[i]);
 
             return new RoadBuildJob
             {
@@ -290,6 +337,7 @@ namespace GeoFoundry.Geometry
                 Rings = layer.Rings,
                 RingPoints = layer.RingPoints,
                 FeatureColors = JobInputs.PrepareFeatureColors(featureColors, buffers),
+                DrawItems = buffers.Own(new NativeArray<LineDrawItem>(0, Allocator.Persistent)),
                 Coord = coord,
                 Extent = layer.Extent,
                 Grid = grid,
@@ -298,6 +346,7 @@ namespace GeoFoundry.Geometry
                 Normals = buffers.Normals,
                 Uvs = buffers.Uvs,
                 Colors = buffers.Colors,
+                Uv1 = buffers.Uv1,
                 Triangles = buffers.Triangles,
                 Ranges = buffers.Ranges,
                 RangeFeatureIndices = buffers.RangeFeatureIndices,
@@ -377,7 +426,7 @@ namespace GeoFoundry.Geometry
             try
             {
                 return await MeshAssembler.BuildSingleMeshAsync(
-                    buffers.Positions, buffers.Normals, buffers.Uvs, buffers.Colors, buffers.Triangles, name, ct);
+                    buffers.Positions, buffers.Normals, buffers.Uvs, buffers.Colors, buffers.Triangles, name, ct, buffers.Uv1);
             }
             finally
             {

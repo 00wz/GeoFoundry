@@ -26,6 +26,11 @@ namespace GeoFoundry.Geometry
     ///
     /// Ribbon UVs: <c>x</c> ∈ [0,1] across the road, <c>y</c> is the distance traveled along the road in meters;
     /// values are interpolated barycentrically to the sub-vertices produced by grid clipping.
+    ///
+    /// Draw-list mode (<see cref="UseDrawItems"/>): instead of all LineString features with <see cref="Widths"/>, the
+    /// job emits the items of <see cref="DrawItems"/> in order (a feature may appear several times, e.g. casing then
+    /// fill), optionally outlining Polygon features, and writes each item's dash pattern to <see cref="Uv1"/>. End
+    /// stitching then only joins line ends of items with the same width, so a casing never stitches to a fill.
     /// </summary>
     [BurstCompile]
     internal struct RoadBuildJob : IJob
@@ -43,6 +48,15 @@ namespace GeoFoundry.Geometry
         /// <summary>Same pattern as <see cref="SurfaceBuildJob.FeatureColors"/>.</summary>
         [ReadOnly] public NativeArray<Color32> FeatureColors;
 
+        /// <summary>
+        /// Ordered draw list used when <see cref="UseDrawItems"/> is set (<see cref="Widths"/> and
+        /// <see cref="FeatureColors"/> are then ignored). Must always be a valid (possibly empty) array.
+        /// </summary>
+        [ReadOnly] public NativeArray<LineDrawItem> DrawItems;
+
+        /// <summary>Whether <see cref="DrawItems"/> drives the output instead of the feature arrays.</summary>
+        public bool UseDrawItems;
+
         public TileCoord Coord;
         public uint Extent;
 
@@ -59,6 +73,8 @@ namespace GeoFoundry.Geometry
         public NativeList<float2> Uvs;
         /// <summary>Per-vertex output parallel to <see cref="Positions"/>; see <see cref="FeatureColors"/>.</summary>
         public NativeList<Color32> Colors;
+        /// <summary>Per-vertex dash pattern (<see cref="LineDrawItem.Dash"/>), written only in draw-list mode.</summary>
+        public NativeList<float2> Uv1;
         public NativeList<int> Triangles;
         public NativeList<MeshRange> Ranges;
         /// <summary>Source feature index (into the Feature* arrays) of each output MeshRange. The handler uses it
@@ -94,7 +110,7 @@ namespace GeoFoundry.Geometry
             var lineRings = new NativeList<int>(4, Allocator.Temp);
             var points = new NativeList<float2>(64, Allocator.Temp);
             var controlPoints = new NativeList<ControlPoint>(64, Allocator.Temp);
-            var lineEnds = new NativeParallelMultiHashMap<int2, LineEnd>(64, Allocator.Temp);
+            var lineEnds = new NativeParallelMultiHashMap<int3, LineEnd>(64, Allocator.Temp);
 
             bool hasColors = FeatureColors.Length == FeatureGeomTypes.Length;
 
@@ -106,14 +122,12 @@ namespace GeoFoundry.Geometry
             {
                 CollectLineEnds(ref lineEnds);
 
-                for (int fi = 0; fi < FeatureGeomTypes.Length; fi++)
+                int itemCount = UseDrawItems ? DrawItems.Length : FeatureGeomTypes.Length;
+                for (int item = 0; item < itemCount; item++)
                 {
-                    if (FeatureGeomTypes[fi] != MvtGeomType.LineString) continue;
-
-                    float width = Widths[fi];
-                    if (width <= 0f) continue;
-
-                    Color32 color = hasColors ? FeatureColors[fi] : new Color32(255, 255, 255, 255);
+                    if (!TryGetItem(item, hasColors, out int fi, out float width, out Color32 color, out float2 dash, out bool outline))
+                        continue;
+                    int stitchKey = StitchKey(width);
 
                     NativeMvtLineHelpers.ProjectLines(
                         FeatureRingRange[fi], Rings, RingPoints, Coord, Extent,
@@ -142,17 +156,22 @@ namespace GeoFoundry.Geometry
 
                         bool isClosed = points.Length > 2 && math.distancesq(points[0], points[points.Length - 1]) < 1e-8f;
                         if (isClosed) points.RemoveAt(points.Length - 1);
+                        if (outline)
+                        {
+                            if (points.Length < 3) continue;
+                            isClosed = true;
+                        }
 
                         bool hasAdjStart = false, hasAdjEnd = false;
                         float2 adjStart = default, adjEnd = default;
                         if (!isClosed && TryGetLineEnds(lineRings[li], out int2 start, out int2 startNeighbor, out int2 end, out int2 endNeighbor))
                         {
-                            if (TryGetAdjacent(lineEnds, start, lineRings[li], startNeighbor, out int2 adj))
+                            if (TryGetAdjacent(lineEnds, new int3(start, stitchKey), lineRings[li], startNeighbor, out int2 adj))
                             {
                                 hasAdjStart = true;
                                 adjStart = ToTileLocal(adj, tileBounds, bb);
                             }
-                            if (TryGetAdjacent(lineEnds, end, lineRings[li], endNeighbor, out adj))
+                            if (TryGetAdjacent(lineEnds, new int3(end, stitchKey), lineRings[li], endNeighbor, out adj))
                             {
                                 hasAdjEnd = true;
                                 adjEnd = ToTileLocal(adj, tileBounds, bb);
@@ -160,7 +179,7 @@ namespace GeoFoundry.Geometry
                         }
 
                         BuildControlPoints(points, isClosed, width, hasAdjStart, adjStart, hasAdjEnd, adjEnd, ref controlPoints);
-                        BuildRibbon(controlPoints, isClosed, tileSize, idxBase, color);
+                        BuildRibbon(controlPoints, isClosed, tileSize, idxBase, color, dash);
                     }
 
                     int featureVertCount = Positions.Length - featureVertStart;
@@ -183,21 +202,60 @@ namespace GeoFoundry.Geometry
             }
         }
 
-        /// <summary>Collects the ends of all open, rendered lines of the layer, keyed by their MVT coordinates (exact
-        /// match).</summary>
-        private void CollectLineEnds(ref NativeParallelMultiHashMap<int2, LineEnd> lineEnds)
+        /// <summary>
+        /// Resolves one entry of the iteration (a feature in feature mode, a <see cref="LineDrawItem"/> in draw-list
+        /// mode). Returns <c>false</c> if it emits nothing: out-of-range index, unsupported geometry or width ≤ 0.
+        /// </summary>
+        private bool TryGetItem(int item, bool hasColors, out int fi, out float width, out Color32 color, out float2 dash, out bool outline)
         {
-            for (int fi = 0; fi < FeatureGeomTypes.Length; fi++)
+            if (UseDrawItems)
             {
-                if (FeatureGeomTypes[fi] != MvtGeomType.LineString || Widths[fi] <= 0f) continue;
+                LineDrawItem di = DrawItems[item];
+                fi = di.FeatureIndex;
+                width = di.WidthMeters;
+                color = di.Color;
+                dash = di.Dash;
+                outline = (di.Flags & LineDrawFlags.PolygonOutline) != 0;
+            }
+            else
+            {
+                fi = item;
+                width = Widths[fi];
+                color = hasColors ? FeatureColors[fi] : new Color32(255, 255, 255, 255);
+                dash = default;
+                outline = false;
+            }
+
+            if ((uint)fi >= (uint)FeatureGeomTypes.Length || width <= 0f) return false;
+            MvtGeomType geom = FeatureGeomTypes[fi];
+            if (outline) return geom == MvtGeomType.Polygon;
+            return geom == MvtGeomType.LineString;
+        }
+
+        /// <summary>
+        /// Third component of the line-end key: in draw-list mode lines are stitched only to lines of the same width
+        /// (the same pass, e.g. fills to fills), in feature mode to any rendered line.
+        /// </summary>
+        private int StitchKey(float width) => UseDrawItems ? math.asint(width) : 0;
+
+        /// <summary>Collects the ends of all open, rendered lines, keyed by their MVT coordinates (exact match) and
+        /// <see cref="StitchKey"/>.</summary>
+        private void CollectLineEnds(ref NativeParallelMultiHashMap<int3, LineEnd> lineEnds)
+        {
+            bool hasColors = FeatureColors.Length == FeatureGeomTypes.Length;
+            int itemCount = UseDrawItems ? DrawItems.Length : FeatureGeomTypes.Length;
+            for (int item = 0; item < itemCount; item++)
+            {
+                if (!TryGetItem(item, hasColors, out int fi, out float width, out _, out _, out bool outline) || outline) continue;
+                int key = StitchKey(width);
 
                 int2 ringRange = FeatureRingRange[fi];
                 for (int r = 0; r < ringRange.y; r++)
                 {
                     int ring = ringRange.x + r;
                     if (!TryGetLineEnds(ring, out int2 start, out int2 startNeighbor, out int2 end, out int2 endNeighbor)) continue;
-                    lineEnds.Add(start, new LineEnd { Ring = ring, Neighbor = startNeighbor });
-                    lineEnds.Add(end, new LineEnd { Ring = ring, Neighbor = endNeighbor });
+                    lineEnds.Add(new int3(start, key), new LineEnd { Ring = ring, Neighbor = startNeighbor });
+                    lineEnds.Add(new int3(end, key), new LineEnd { Ring = ring, Neighbor = endNeighbor });
                 }
             }
         }
@@ -233,7 +291,7 @@ namespace GeoFoundry.Geometry
         /// not double back along our own segment.
         /// </summary>
         private static bool TryGetAdjacent(
-            NativeParallelMultiHashMap<int2, LineEnd> lineEnds, int2 end, int ring, int2 ownNeighbor, out int2 adjacent)
+            NativeParallelMultiHashMap<int3, LineEnd> lineEnds, int3 end, int ring, int2 ownNeighbor, out int2 adjacent)
         {
             adjacent = default;
             int count = 0;
@@ -326,7 +384,7 @@ namespace GeoFoundry.Geometry
         /// Emits ribbon triangles from the control points: for each segment, the join half at its start, the segment
         /// quad and the join half at its end.
         /// </summary>
-        private void BuildRibbon(NativeList<ControlPoint> cps, bool isClosed, float2 tileSize, int idxBase, Color32 color)
+        private void BuildRibbon(NativeList<ControlPoint> cps, bool isClosed, float2 tileSize, int idxBase, Color32 color, float2 dash)
         {
             int segmentCount = cps.Length - (isClosed ? 0 : 1);
             float uvProgress = 0f;
@@ -344,7 +402,7 @@ namespace GeoFoundry.Geometry
                     float c4x = current.SharedLeft ? 1f : 0f;
                     EmitTriangle(current.P0, current.P1, current.P4,
                         new float2(0f, end), new float2(1f, end), new float2(c4x, start),
-                        tileSize, idxBase, color);
+                        tileSize, idxBase, color, dash);
                     uvProgress = end;
                 }
 
@@ -353,8 +411,8 @@ namespace GeoFoundry.Geometry
                     float2 a = current.P0, b = current.P1, c = next.P2, d = next.P3;
                     float start = uvProgress;
                     float end = start + math.distance(a, c);
-                    EmitTriangle(a, b, c, new float2(0f, start), new float2(1f, start), new float2(0f, end), tileSize, idxBase, color);
-                    EmitTriangle(b, d, c, new float2(1f, start), new float2(1f, end), new float2(0f, end), tileSize, idxBase, color);
+                    EmitTriangle(a, b, c, new float2(0f, start), new float2(1f, start), new float2(0f, end), tileSize, idxBase, color, dash);
+                    EmitTriangle(b, d, c, new float2(1f, start), new float2(1f, end), new float2(0f, end), tileSize, idxBase, color, dash);
                     uvProgress = end;
                 }
 
@@ -366,7 +424,7 @@ namespace GeoFoundry.Geometry
                     float c4x = next.SharedLeft ? 1f : 0f;
                     EmitTriangle(next.P2, next.P3, next.P4,
                         new float2(0f, start), new float2(1f, start), new float2(c4x, end),
-                        tileSize, idxBase, color);
+                        tileSize, idxBase, color, dash);
                     uvProgress = end;
                 }
             }
@@ -378,7 +436,7 @@ namespace GeoFoundry.Geometry
         /// </summary>
         private void EmitTriangle(
             float2 a, float2 b, float2 c, float2 uvA, float2 uvB, float2 uvC,
-            float2 tileSize, int idxBase, Color32 color)
+            float2 tileSize, int idxBase, Color32 color, float2 dash)
         {
             int before = Positions.Length;
             NativeGroundProjector.ProjectTriangle(a / tileSize, b / tileSize, c / tileSize, Grid, LocalFrame, ref Positions, ref Normals, ref Uvs);
@@ -391,6 +449,7 @@ namespace GeoFoundry.Geometry
                 float3 w = NativeTriangleMath.Barycentric(Uvs[vi] * tileSize, a, b, c);
                 Uvs[vi] = uvA * w.x + uvB * w.y + uvC * w.z;
                 Colors.Add(color);
+                if (UseDrawItems) Uv1.Add(dash);
                 Triangles.Add(vi - idxBase);
             }
         }

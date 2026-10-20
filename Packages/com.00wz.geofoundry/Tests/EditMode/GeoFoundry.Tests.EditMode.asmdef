@@ -8,6 +8,7 @@
         "GeoFoundry.TileIO",
         "GeoFoundry.Geometry",
         "GeoFoundry.Render",
+        "GeoFoundry.OpenMapTiles",
         "GeoFoundry.Ground",
         "GeoFoundry.Tiles",
         "GeoFoundry.Bootstrap",

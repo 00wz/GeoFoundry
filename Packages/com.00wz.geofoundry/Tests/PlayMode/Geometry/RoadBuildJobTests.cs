@@ -43,6 +43,8 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             var normals = new NativeList<float3>(Allocator.TempJob);
             var uvs = new NativeList<float2>(Allocator.TempJob);
             var colors = new NativeList<Color32>(Allocator.TempJob);
+            var uv1 = new NativeList<float2>(Allocator.TempJob);
+            var drawItems = new NativeArray<LineDrawItem>(0, Allocator.TempJob);
             var triangles = new NativeList<int>(Allocator.TempJob);
             var ranges = new NativeList<MeshRange>(Allocator.TempJob);
             var rangeFeatureIndices = new NativeList<int>(Allocator.TempJob);
@@ -59,6 +61,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                     Rings = rings,
                     RingPoints = ringPoints,
                     FeatureColors = featureColors,
+                    DrawItems = drawItems,
                     Coord = coord,
                     Extent = extent,
                     Grid = GroundTestUtils.FlatGrid(ground, coord),
@@ -67,6 +70,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                     Normals = normals,
                     Uvs = uvs,
                     Colors = colors,
+                    Uv1 = uv1,
                     Triangles = triangles,
                     Ranges = ranges,
                     RangeFeatureIndices = rangeFeatureIndices,
@@ -124,6 +128,8 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                 normals.Dispose();
                 uvs.Dispose();
                 colors.Dispose();
+                uv1.Dispose();
+                drawItems.Dispose();
                 triangles.Dispose();
                 ranges.Dispose();
                 rangeFeatureIndices.Dispose();
@@ -147,6 +153,8 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             var normals = new NativeList<float3>(Allocator.TempJob);
             var uvs = new NativeList<float2>(Allocator.TempJob);
             var colors = new NativeList<Color32>(Allocator.TempJob);
+            var uv1 = new NativeList<float2>(Allocator.TempJob);
+            var drawItems = new NativeArray<LineDrawItem>(0, Allocator.TempJob);
             var triangles = new NativeList<int>(Allocator.TempJob);
             var ranges = new NativeList<MeshRange>(Allocator.TempJob);
             var rangeFeatureIndices = new NativeList<int>(Allocator.TempJob);
@@ -162,6 +170,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                     Rings = rings,
                     RingPoints = ringPoints,
                     FeatureColors = featureColors,
+                    DrawItems = drawItems,
                     Coord = coord,
                     Extent = extent,
                     Grid = GroundTestUtils.FlatGrid(ground, coord),
@@ -170,6 +179,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                     Normals = normals,
                     Uvs = uvs,
                     Colors = colors,
+                    Uv1 = uv1,
                     Triangles = triangles,
                     Ranges = ranges,
                     RangeFeatureIndices = rangeFeatureIndices,
@@ -194,6 +204,8 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                 normals.Dispose();
                 uvs.Dispose();
                 colors.Dispose();
+                uv1.Dispose();
+                drawItems.Dispose();
                 triangles.Dispose();
                 ranges.Dispose();
                 rangeFeatureIndices.Dispose();
@@ -223,6 +235,8 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             var normals = new NativeList<float3>(Allocator.TempJob);
             var uvs = new NativeList<float2>(Allocator.TempJob);
             var colors = new NativeList<Color32>(Allocator.TempJob);
+            var uv1 = new NativeList<float2>(Allocator.TempJob);
+            var drawItems = new NativeArray<LineDrawItem>(0, Allocator.TempJob);
             var triangles = new NativeList<int>(Allocator.TempJob);
             var ranges = new NativeList<MeshRange>(Allocator.TempJob);
             var rangeFeatureIndices = new NativeList<int>(Allocator.TempJob);
@@ -238,6 +252,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                     Rings = rings,
                     RingPoints = ringPoints,
                     FeatureColors = featureColors,
+                    DrawItems = drawItems,
                     Coord = coord,
                     Extent = extent,
                     Grid = GroundTestUtils.FlatGrid(ground, coord),
@@ -247,6 +262,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                     Normals = normals,
                     Uvs = uvs,
                     Colors = colors,
+                    Uv1 = uv1,
                     Triangles = triangles,
                     Ranges = ranges,
                     RangeFeatureIndices = rangeFeatureIndices,
@@ -279,6 +295,8 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                 normals.Dispose();
                 uvs.Dispose();
                 colors.Dispose();
+                uv1.Dispose();
+                drawItems.Dispose();
                 triangles.Dispose();
                 ranges.Dispose();
                 rangeFeatureIndices.Dispose();
@@ -353,6 +371,8 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             var normals = new NativeList<float3>(Allocator.TempJob);
             var uvs = new NativeList<float2>(Allocator.TempJob);
             var colors = new NativeList<Color32>(Allocator.TempJob);
+            var uv1 = new NativeList<float2>(Allocator.TempJob);
+            var drawItems = new NativeArray<LineDrawItem>(0, Allocator.TempJob);
             var triangles = new NativeList<int>(Allocator.TempJob);
             var ranges = new NativeList<MeshRange>(Allocator.TempJob);
             var rangeFeatureIndices = new NativeList<int>(Allocator.TempJob);
@@ -369,6 +389,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                     Rings = rings,
                     RingPoints = ringPoints,
                     FeatureColors = featureColors,
+                    DrawItems = drawItems,
                     Coord = coord,
                     Extent = extent,
                     Grid = GroundTestUtils.FlatGrid(ground, coord),
@@ -377,6 +398,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                     Normals = normals,
                     Uvs = uvs,
                     Colors = colors,
+                    Uv1 = uv1,
                     Triangles = triangles,
                     Ranges = ranges,
                     RangeFeatureIndices = rangeFeatureIndices,
@@ -414,6 +436,8 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                 normals.Dispose();
                 uvs.Dispose();
                 colors.Dispose();
+                uv1.Dispose();
+                drawItems.Dispose();
                 triangles.Dispose();
                 ranges.Dispose();
                 rangeFeatureIndices.Dispose();

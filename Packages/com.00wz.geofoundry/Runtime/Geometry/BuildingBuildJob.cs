@@ -14,7 +14,7 @@ namespace GeoFoundry.Geometry
     /// per-feature terrain height (the minimum over the footprint) inside this job, and the contract offers no
     /// way to pass in a height computed outside (e.g. shared by a group of features). As a result, multi-feature
     /// buildings (<c>building</c> + <c>building:part</c>) can "fall apart" on slopes, because neighboring
-    /// features get independent bases. Not used by the default <c>BuildingsLayerHandler</c> (OMT); see
+    /// features get independent bases. Not used by the default <c>OmtBuildingHandler</c> (OMT); see
     /// <see cref="BuildingTerrainBuildJob"/>, which is terrain-conforming and avoids this by construction. Kept as
     /// a starting point for schemas that group the features of one building (e.g. by <c>group_id</c>); to be
     /// usable, this job and <see cref="AsyncGeometryWorker.BuildBuildingMeshesAsync"/> would need to accept a

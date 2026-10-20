@@ -40,6 +40,16 @@ namespace GeoFoundry.Geometry
         /// </summary>
         [ReadOnly] public NativeArray<Color32> FeatureColors;
 
+        /// <summary>
+        /// Ordered draw list, used instead of iterating all features when <see cref="UseDrawItems"/> is set: only the
+        /// listed features are emitted, in list order, with the item's color (<see cref="FeatureColors"/> is then
+        /// ignored). Must always be a valid (possibly empty) array, as required by the Job System.
+        /// </summary>
+        [ReadOnly] public NativeArray<SurfaceDrawItem> DrawItems;
+
+        /// <summary>Whether <see cref="DrawItems"/> drives the output instead of the feature arrays.</summary>
+        public bool UseDrawItems;
+
         public TileCoord Coord;
         public uint Extent;
         public float UvScalePerMeter;
@@ -96,9 +106,11 @@ namespace GeoFoundry.Geometry
 
             try
             {
-                for (int fi = 0; fi < FeatureGeomTypes.Length; fi++)
+                int itemCount = UseDrawItems ? DrawItems.Length : FeatureGeomTypes.Length;
+                for (int item = 0; item < itemCount; item++)
                 {
-                    if (FeatureGeomTypes[fi] != MvtGeomType.Polygon) continue;
+                    int fi = UseDrawItems ? DrawItems[item].FeatureIndex : item;
+                    if ((uint)fi >= (uint)FeatureGeomTypes.Length || FeatureGeomTypes[fi] != MvtGeomType.Polygon) continue;
 
                     NativeMvtPolygonHelpers.SplitMultiPolygon(
                         FeatureRingRange[fi], Rings, RingPoints, Coord, Extent,
@@ -106,7 +118,8 @@ namespace GeoFoundry.Geometry
 
                     if (polyPolygonRanges.Length == 0) continue;
 
-                    Color32 color = hasColors ? FeatureColors[fi] : new Color32(255, 255, 255, 255);
+                    Color32 color = UseDrawItems ? DrawItems[item].Color
+                        : hasColors ? FeatureColors[fi] : new Color32(255, 255, 255, 255);
 
                     int featureVertStart = Positions.Length;
                     int featureTriStart = Triangles.Length;

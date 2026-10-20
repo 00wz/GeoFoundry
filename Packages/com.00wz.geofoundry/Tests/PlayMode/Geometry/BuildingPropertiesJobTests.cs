@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using NUnit.Framework;
 using GeoFoundry.Core.Mvt;
-using GeoFoundry.Render.Layers.OpenMapTiles;
+using GeoFoundry.OpenMapTiles;
 using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;

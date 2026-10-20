@@ -1,8 +1,8 @@
 # GeoFoundry
 
-A Unity package for building 3D maps from MVT vector tiles and DEM elevation data. What gets built from the data is decided by layer handlers, so the package is not tied to a particular tile schema: the built-in handlers (buildings, roads, water, landuse, landcover, parks) target the OpenMapTiles schema, and other schemas get their own handlers. Heavy computation runs on Burst and the Job System, including in WebGL builds.
+A Unity package for building 3D maps from MVT vector tiles and DEM elevation data. What gets built from the data is decided by layer handlers, so the package is not tied to a particular tile schema: a complete set of built-in handlers covers all layers of the OpenMapTiles schema (surfaces, roads, buildings, boundaries, labels and icons), and other schemas get their own handlers. Heavy computation runs on Burst and the Job System, including in WebGL builds.
 
-> Status: in development. Working today: MVT and DEM tile loading, adaptive quadtree LOD with a memory budget, terrain elevation, buildings, roads and surfaces, the camera and floating origin. See [CHANGELOG.md](../CHANGELOG.md) for the change history.
+> Status: in development. Working today: MVT and DEM tile loading, adaptive quadtree LOD with a memory budget, terrain elevation, the full OpenMapTiles layer set (surfaces, roads, buildings, boundaries, labels and icons), the camera and floating origin. See [CHANGELOG.md](../CHANGELOG.md) for the change history.
 
 ## Requirements
 
@@ -63,7 +63,8 @@ GeoFoundry.Core           ← public API: coordinates and floating origin, MVT m
 GeoFoundry.TileIO         → Core                ← TileDownloader, HTTP MVT/DEM sources, Terrarium decoder
 GeoFoundry.Geometry       → Core                ← Burst geometry jobs, triangulation, projection, mesh building
 GeoFoundry.Ground         → Core                ← ground grids (from DEM or flat), terrain height
-GeoFoundry.Render         → Core, Geometry, URP ← layer and terrain handlers, URP shaders
+GeoFoundry.Render         → Core, Geometry, URP ← schema-independent handlers, URP shaders
+GeoFoundry.OpenMapTiles   → Core, Geometry, Render ← OpenMapTiles handlers, labels and icons
 GeoFoundry.Tiles          → Core, Ground        ← quadtree LOD, memory budget, tile lifecycle, debugging
 GeoFoundry.CameraControl  → Core, Input System  ← MapCameraRig; compiled only if Input System is installed
 GeoFoundry.Bootstrap      → Core, TileIO, Ground, Tiles ← GeoFoundryBootstrapper and GeoFoundryConfig
@@ -88,13 +89,110 @@ implementation.
 
 Custom terrain elevation is plugged in through an `IDemTileSource` height source; the ground grid provider
 (`GroundGridProvider`) is an internal mechanism with two implementations and is not meant to be extended. For
-building geometry in your own handlers there are the `AsyncGeometryWorker` (`GeoFoundry.Geometry`) and
-`MeshHierarchyInstance` (`GeoFoundry.Render.Layers`) helpers.
+building geometry in your own handlers there are the `AsyncGeometryWorker` (`GeoFoundry.Geometry`; including the
+ordered draw-list builders `BuildSurfaceMeshAsync(layer, SurfaceDrawItem[] …)` and `BuildLineMeshAsync`, and
+`GroundAnchors` for placing objects on the ground) and `MeshHierarchyInstance` (`GeoFoundry.Render.Layers`) helpers.
 
-The built-in handlers for the OpenMapTiles schema (buildings, roads) live in `GeoFoundry.Render.Layers.OpenMapTiles`,
-and the ready-made handler assets in `Presets/OpenMapTiles/`. For another schema, write your own handlers on their
-model; `SurfacesLayerHandler` and `DefaultTerrainHandler` do not depend on the schema and can be reused as is.
-Surface and building UVs are in meters: set the texture density with the material's Tiling.
+For another schema, write your own handlers on the model of the OpenMapTiles ones (see below);
+`SurfacesLayerHandler` and `DefaultTerrainHandler` do not depend on the schema and can be reused as is. Surface and
+building UVs are in meters: set the texture density with the material's Tiling.
+
+## OpenMapTiles handlers
+
+The package ships a complete set of handlers for the [OpenMapTiles](https://openmaptiles.org/schema/) 3.16 schema
+(assembly `GeoFoundry.OpenMapTiles`, namespace `GeoFoundry.OpenMapTiles`), with ready-made assets in
+`Presets/OpenMapTiles/`. Every layer of the schema has a handler, and every attribute that carries rendering
+information is read. The default look follows the official "OSM OpenMapTiles" style (colors, widths, casings, dashes,
+icons, label fonts and zooms), and every table is editable in the inspector of the handler asset.
+
+| Layer | Handler | Output |
+|---|---|---|
+| `water` | `OmtWaterHandler` | fills by `class`; `intermittent` color; `brunnel=tunnel` hidden/dimmed |
+| `waterway` | `OmtWaterwayHandler` | ribbons by `class`; dashed `intermittent` and tunnels; bridges (aqueducts) with casing; names along lines |
+| `landcover` | `OmtLandcoverHandler` | fills by `subclass` with `class` fallbacks; outlines |
+| `landuse` | `OmtLanduseHandler` | fills by `class` (`subclass` matchable); outlines; optional `access=no` fade |
+| `park` | `OmtParkHandler` | faint fill, casing outline, names by `rank` |
+| `boundary` | `OmtBoundaryHandler` | lines by `admin_level`; `disputed` dashed; `maritime` tinted/hidden; worldview filter on `claimed_by`; `aboriginal_lands` outlines |
+| `aeroway` | `OmtAerowayHandler` | area fills, runway/taxiway lines, `ref` labels |
+| `transportation` | `OmtTransportationHandler` | casing + fill + overlay ribbons by `class`/`subclass`; tunnels, ground and bridges ordered by `layer`; `ramp`, `service`, `surface`, `access`, `toll`, `indoor`, `level`; oneway arrows; pedestrian/bridge/pier areas |
+| `building` | `OmtBuildingHandler` | terrain-conforming extrusion by `render_height`/`render_min_height`, `colour` tint, `hide_3d` |
+| `water_name` | `OmtWaterNameHandler` | point labels by `class`, labels along lake center lines |
+| `transportation_name` | `OmtTransportationNameHandler` | street names along lines, `ref` shields, junction labels |
+| `place` | `OmtPlaceHandler` | names by `class` and `capital` (capital markers), placed by `rank` |
+| `housenumber` | `OmtHousenumberHandler` | house numbers |
+| `poi` | `OmtPoiHandler` | icons by `subclass`/`class` with names, zoom-gated by class, placed by `rank`; `agg_stop`, `indoor`, `level` filters |
+| `mountain_peak` | `OmtMountainPeakHandler` | peak/volcano/saddle icons with name and elevation (m or ft by `customary_ft`); ridge/cliff lines |
+| `aerodrome_label` | `OmtAerodromeLabelHandler` | airport markers with name and IATA/ICAO code |
+
+### Setup
+
+Add the assets from `Presets/OpenMapTiles/` (the `Omt*` handlers and `Terrain`) to `GeoFoundryConfig.LayerHandlers`
+/ `TerrainHandler`. `OmtTextSettings` is shared by all label-producing handlers: it holds the fonts (Noto Sans
+Regular/Bold/Italic are included), the name language preference (`name:en`, `name` by default; put e.g. `name:ru`
+first for Russian names), the label and icon materials and the icon atlas (`OmtIconAtlas`, built from the style's
+icons with `Tools~/omt-icons/build_atlas.py`).
+
+### Attribution
+
+The default look is derived from the OpenMapTiles style (CC-BY 4.0) and OpenMapTiles data comes from OpenStreetMap
+(ODbL), so an application showing the map must display a visible credit, for example
+`© OpenMapTiles © OpenStreetMap contributors` in a corner of the screen. GeoFoundry does not draw it for you. See
+[Third Party Notices.md](../Third%20Party%20Notices.md) for the licenses of the bundled style tables, icons and fonts.
+
+### Rebuilding the icon atlas
+
+`Tools~/omt-icons/build_atlas.py` rasterizes the SVG icons of the openmaptiles repository (`style/icons`) into
+`omt-icons.png` + `omt-icons.json`. It needs Python 3 with Pillow and Inkscape 1.x:
+
+```
+python build_atlas.py <openmaptiles>/style/icons <package>/Presets/OpenMapTiles/Icons --inkscape <path to inkscape> --width 512
+```
+
+Icon names are the SVG file names without the extension; label rules refer to them (`{class}`/`{subclass}`
+placeholders are replaced by the feature's values).
+
+### Draw order
+
+Draped layers use the ZTest Always shaders `GeoFoundry/Surface Lit` (fills) and `GeoFoundry/Line Lit` (lines; adds
+dashes), so the material's Sorting Priority (`_QueueOffset`) decides which layer covers which. The preset materials
+follow `OmtDrawOrder`; a handler logs a warning in the inspector if an assigned material deviates from it:
+
+| Priority | Mesh | Priority | Mesh |
+|---|---|---|---|
+| −50 | terrain | −32 | transportation areas |
+| −46 / −45 | landcover fill / outline | −30 | transportation lines |
+| −44 / −43 | landuse fill / outline | −28 | waterway bridges |
+| −42 | park fill | −27 | mountain lines |
+| −40 | water | −26 | boundary |
+| −38 | waterway | −24 | park outline |
+| −36 / −35 | aeroway fill / lines | 0 | buildings |
+
+Inside one mesh the order of the features is the draw order (casings below fills, tunnels below ground roads below
+bridges). Colors come from the style tables as vertex colors, so the preset materials have a white base color.
+
+### Widths and zooms
+
+Scene units are Web Mercator meters. Line widths combine a real ground width (converted to Mercator meters at the
+tile's latitude) with a minimum width in style pixels at the tile's zoom, so lines stay visible on low-zoom tiles and
+keep their physical size up close. Label sizes are screen pixels, and label zooms are display zooms (the MapLibre
+convention, where the world is `512 · 2^zoom` pixels wide). Because OpenMapTiles tiles end at zoom 14 and are viewed
+much closer, labels are decluttered per tile for several display zooms beyond the tile zoom
+(`OmtTextSettings.OverzoomLevels`): each label gets the zoom from which it does not collide with more important
+labels, and the `GeoFoundry/Label` shader fades it in from that zoom as the camera approaches.
+
+### Limitations
+
+- Labels are decluttered within a tile, across all its label layers (in the order the layers come in the tile;
+  house numbers yield to the other layers); collisions across tile borders are not resolved. Duplicates from the
+  tile buffer are removed (only points inside the tile extent are labeled). A label takes space only from the zoom
+  at which it becomes visible.
+- Text is laid out without complex shaping (Arabic joining, Indic scripts) or right-to-left reordering; scripts
+  covered by the fonts (Latin, Cyrillic, Greek with Noto Sans) render correctly.
+- Fill patterns of the style (forest leaves, wetland reeds, military hatching) are not reproduced; semi-transparent
+  style fills are flattened over the background color.
+- Country names on either side of a border (`boundary.adm0_l`/`adm0_r`) and the `route_2..6_*` concurrencies of
+  `transportation_name` are not drawn.
+
 
 ## Diagnostics
 

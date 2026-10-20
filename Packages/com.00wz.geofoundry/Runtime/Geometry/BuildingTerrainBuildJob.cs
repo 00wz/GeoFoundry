@@ -24,7 +24,7 @@ namespace GeoFoundry.Geometry
     /// <see cref="NativeGroundProjector.ProjectLineSegment"/> to upsample wall edges along cell boundaries.
     ///
     /// Not to be confused with <see cref="BuildingBuildJob"/> (flat-base extrusion, kept as a starting point for
-    /// schemas that group features and not used by the default <c>BuildingsLayerHandler</c>; see its doc).
+    /// schemas that group features and not used by the default <c>OmtBuildingHandler</c>; see its doc).
     /// </summary>
     [BurstCompile]
     internal struct BuildingTerrainBuildJob : IJob

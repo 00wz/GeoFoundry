@@ -1,0 +1,16 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 50738dc5c92b6b14688d8ede1f04be80, type: 3}
+  m_Name: OmtLandcover
+  m_EditorClassIdentifier:
+  _fillMaterial: {fileID: 2100000, guid: 937b735152034f71a5d655995266249a, type: 2}
+  _outlineMaterial: {fileID: 2100000, guid: c59c597bef844a0bacc2db0d66276352, type: 2}

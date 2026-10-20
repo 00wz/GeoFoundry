@@ -9,6 +9,10 @@
 //  3) LitPassVertex: pass-through to output.vertexColor
 //  4) LitPassFragment: multiplies surfaceData.albedo/alpha right after InitializeStandardLitSurfaceData
 //
+// Optional dashing (search for "GEOFOUNDRY DASH"), compiled only with #define GEOFOUNDRY_DASH before the include
+// (GeoFoundry/Line Lit): Varyings.dash (TEXCOORD12) carries the distance along the line (TEXCOORD0.y) and the dash
+// pattern (TEXCOORD1), and the fragment is discarded in the gaps.
+//
 // Everything else matches the original. Like the original ("keep this file in sync with LitGBufferPass.hlsl"),
 // keep this file in sync with the matching fork GeoFoundryLitGBufferPass.hlsl.
 #ifndef GEOFOUNDRY_LIT_FORWARD_PASS_INCLUDED
@@ -80,6 +84,9 @@ struct Varyings
 #endif
 
     half4 vertexColor               : TEXCOORD11; // GEOFOUNDRY VERTEX COLOR
+#ifdef GEOFOUNDRY_DASH
+    float3 dash                     : TEXCOORD12; // GEOFOUNDRY DASH: x = distance along, yz = dash, gap
+#endif
 
     float4 positionCS               : SV_POSITION;
     UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -244,11 +251,27 @@ Varyings LitPassVertex(Attributes input)
 #endif
 
     output.vertexColor = input.color; // GEOFOUNDRY VERTEX COLOR
+#ifdef GEOFOUNDRY_DASH
+    output.dash = float3(input.texcoord.y, input.staticLightmapUV); // GEOFOUNDRY DASH
+#endif
 
     output.positionCS = vertexInput.positionCS;
 
     return output;
 }
+
+
+// GEOFOUNDRY DASH (only with #define GEOFOUNDRY_DASH, used by GeoFoundry/Line Lit): TEXCOORD0.y holds the distance
+// along the line in meters and TEXCOORD1 the dash pattern (dash, gap) in meters; (0, 0) is a solid line. Fragments in
+// the gaps are discarded.
+#ifdef GEOFOUNDRY_DASH
+void GeoFoundryClipDash(float3 dash)
+{
+    float period = dash.y + dash.z;
+    if (dash.y > 0.0 && dash.z > 0.0 && fmod(max(dash.x, 0.0), period) > dash.y)
+        discard;
+}
+#endif
 
 // Used in Standard (Physically Based) shader
 void LitPassFragment(
@@ -261,6 +284,10 @@ void LitPassFragment(
 {
     UNITY_SETUP_INSTANCE_ID(input);
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+
+#ifdef GEOFOUNDRY_DASH
+    GeoFoundryClipDash(input.dash); // GEOFOUNDRY DASH
+#endif
 
 #if defined(_PARALLAXMAP)
 #if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)

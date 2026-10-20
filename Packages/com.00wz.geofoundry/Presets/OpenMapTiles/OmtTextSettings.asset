@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fa430eadc398b20408dbda99e93b00c2, type: 3}
+  m_Name: OmtTextSettings
+  m_EditorClassIdentifier:
+  _regularFont: {fileID: 12800000, guid: b44bbdae207b49f6a10186d245155ea1, type: 3}
+  _boldFont: {fileID: 12800000, guid: 3c83d14f5f184e3aa625817dd0e77738, type: 3}
+  _italicFont: {fileID: 12800000, guid: f3dda6b8a3de4b6eb2f74147945a0dcf, type: 3}
+  _textMaterial: {fileID: 2100000, guid: 8742a12b3e124ecb943d99064ede4f6a, type: 2}
+  _iconMaterial: {fileID: 2100000, guid: 044edb005a3b441b9475d4f1f61bcb4f, type: 2}
+  _icons: {fileID: 11400000, guid: 96d61f7732f1412da89680e9ec7a68d0, type: 2}

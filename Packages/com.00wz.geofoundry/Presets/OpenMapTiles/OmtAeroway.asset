@@ -1,0 +1,17 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: af0f579315234686b88255f1d4cc75f2, type: 3}
+  m_Name: OmtAeroway
+  m_EditorClassIdentifier:
+  _fillMaterial: {fileID: 2100000, guid: 90442a621b3049a9ab070b5432c7c03b, type: 2}
+  _lineMaterial: {fileID: 2100000, guid: 18f1d8fdd9bd4d699cd5bee267a7feff, type: 2}
+  _text: {fileID: 11400000, guid: eb2b3119ab60483aa46dac454e5d2aaa, type: 2}

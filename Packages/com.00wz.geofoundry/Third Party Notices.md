@@ -91,6 +91,38 @@ SOFTWARE.
 ## Universal Render Pipeline — Lit
 
 The shaders `Runtime/Render/Shaders/GeoFoundryBuildingLit.shader`, `GeoFoundrySurfaceLit.shader`,
-`GeoFoundryLitForwardPass.hlsl` and `GeoFoundryLitGBufferPass.hlsl` are modified copies of the Lit shader from the
+`GeoFoundryLineLit.shader`, `GeoFoundryLitForwardPass.hlsl` and `GeoFoundryLitGBufferPass.hlsl` are modified copies of the Lit shader from the
 `com.unity.render-pipelines.universal` package, distributed under the
 [Unity Companion License](https://unity.com/legal/licenses/unity-companion-license).
+
+## OpenMapTiles style and icons
+
+The default style tables of the OpenMapTiles handlers (`Runtime/OpenMapTiles/Common/OmtStyleDefaults.cs`,
+`Runtime/OpenMapTiles/Labels/OmtLabelDefaults.cs`) and the icon atlas (`Presets/OpenMapTiles/Icons/omt-icons.png`,
+`omt-icons.json`) are derived from the "OSM OpenMapTiles" style of
+[openmaptiles/openmaptiles](https://github.com/openmaptiles/openmaptiles) (`layers/*/style.json`, `style/icons`).
+
+```
+Copyright (c) 2024, MapTiler.com & OpenMapTiles contributors.
+```
+
+The cartography and visual design of OpenMapTiles are licensed under the
+[Creative Commons Attribution 4.0 International License (CC-BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
+Changes made in GeoFoundry: colors, line widths, dash patterns, label sizes, fonts and minimum zooms were transcribed
+into C# tables and adapted to 3D rendering (pixel widths turned into minimum on-screen widths combined with real
+ground widths, semi-transparent fills flattened over the background, fill patterns dropped, defaults added for
+classes the style does not draw); the SVG icons were rasterized at 2x, packed into one atlas, and the fill and line
+pattern icons were left out. The schema code of OpenMapTiles (BSD 3-Clause) is not included.
+
+The icons of the style are based on the symbols of [OpenStreetMap Carto](https://github.com/gravitystorm/openstreetmap-carto),
+which are released under the [CC0 1.0 Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+
+Maps rendered with this style must visibly credit OpenMapTiles, and maps of OpenStreetMap data must credit
+OpenStreetMap contributors (the data is licensed under the [ODbL](https://www.openstreetmap.org/copyright)), for
+example: `© OpenMapTiles © OpenStreetMap contributors`.
+
+## Noto Sans
+
+`Presets/OpenMapTiles/Fonts/NotoSans-{Regular,Bold,Italic}.ttf` — Copyright 2022 The Noto Project Authors
+(https://github.com/notofonts/latin-greek-cyrillic), licensed under the SIL Open Font License, Version 1.1; the
+license text is in `Presets/OpenMapTiles/Fonts/OFL.txt`.

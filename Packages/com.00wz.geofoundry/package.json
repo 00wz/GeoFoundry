@@ -12,6 +12,7 @@
     "3d",
     "mvt",
     "vector-tiles",
+    "openmaptiles",
     "terrain",
     "burst",
     "webgl"

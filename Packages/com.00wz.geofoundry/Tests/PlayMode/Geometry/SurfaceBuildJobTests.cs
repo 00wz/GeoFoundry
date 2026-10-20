@@ -42,6 +42,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             // Empty is the "no per-feature color" sentinel (see SurfaceBuildJob.FeatureColors):
             // the job broadcasts opaque white to all vertices.
             var featureColors = new NativeArray<Color32>(0, Allocator.TempJob);
+            var drawItems = new NativeArray<SurfaceDrawItem>(0, Allocator.TempJob);
 
             var positions = new NativeList<float3>(Allocator.TempJob);
             var normals = new NativeList<float3>(Allocator.TempJob);
@@ -62,6 +63,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                     Rings = rings,
                     RingPoints = ringPoints,
                     FeatureColors = featureColors,
+                    DrawItems = drawItems,
                     Coord = coord,
                     Extent = extent,
                     UvScalePerMeter = 0.05f,
@@ -121,6 +123,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                 rings.Dispose();
                 ringPoints.Dispose();
                 featureColors.Dispose();
+                drawItems.Dispose();
                 ground.Dispose();
                 positions.Dispose();
                 normals.Dispose();
@@ -144,6 +147,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             var rings = new NativeArray<int2>(new[] { new int2(0, ExteriorRing.Length) }, Allocator.TempJob);
             var ringPoints = new NativeArray<int2>(ExteriorRing, Allocator.TempJob);
             var featureColors = new NativeArray<Color32>(new[] { expected }, Allocator.TempJob);
+            var drawItems = new NativeArray<SurfaceDrawItem>(0, Allocator.TempJob);
 
             var positions = new NativeList<float3>(Allocator.TempJob);
             var normals = new NativeList<float3>(Allocator.TempJob);
@@ -162,6 +166,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                     Rings = rings,
                     RingPoints = ringPoints,
                     FeatureColors = featureColors,
+                    DrawItems = drawItems,
                     Coord = coord,
                     Extent = extent,
                     UvScalePerMeter = 0.05f,
@@ -191,6 +196,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                 rings.Dispose();
                 ringPoints.Dispose();
                 featureColors.Dispose();
+                drawItems.Dispose();
                 ground.Dispose();
                 positions.Dispose();
                 normals.Dispose();
@@ -222,6 +228,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             squareB.CopyTo(ringPointsArr, ExteriorRing.Length);
             var ringPoints = new NativeArray<int2>(ringPointsArr, Allocator.TempJob);
             var featureColors = new NativeArray<Color32>(0, Allocator.TempJob);
+            var drawItems = new NativeArray<SurfaceDrawItem>(0, Allocator.TempJob);
 
             var positions = new NativeList<float3>(Allocator.TempJob);
             var normals = new NativeList<float3>(Allocator.TempJob);
@@ -240,6 +247,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                     Rings = rings,
                     RingPoints = ringPoints,
                     FeatureColors = featureColors,
+                    DrawItems = drawItems,
                     Coord = coord,
                     Extent = extent,
                     UvScalePerMeter = 0.05f,
@@ -283,6 +291,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                 rings.Dispose();
                 ringPoints.Dispose();
                 featureColors.Dispose();
+                drawItems.Dispose();
                 ground.Dispose();
                 positions.Dispose();
                 normals.Dispose();
