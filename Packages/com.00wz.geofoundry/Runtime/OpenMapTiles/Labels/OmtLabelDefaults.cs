@@ -8,6 +8,11 @@ namespace GeoFoundry.OpenMapTiles
     /// OpenMapTiles" style (CC-BY 4.0): text colors, halos, sizes (the style's size around zoom 14), font faces,
     /// icons and minimum zooms. Classes the style does not label get neutral defaults.
     /// </summary>
+    /// <remarks>
+    /// A minimum zoom is never below the tile zoom from which the OpenMapTiles schema (3.x, the reference SQL of
+    /// <c>layers/*/*.sql</c>) puts the class into the tiles (marked "schema: zN" below). A label promised earlier than
+    /// its data could not fade in with the zoom: it would pop up at full opacity when the tile that carries it loads.
+    /// </remarks>
     public static class OmtLabelDefaults
     {
         private static Color C(string css) => OmtColor.Parse(css);
@@ -29,12 +34,12 @@ namespace GeoFoundry.OpenMapTiles
             R("city", "2", 16, "hsl(0, 0%, 13%)", 3, 3).WithHalo(Halo, 1.2f).WithIcon("place-capital-8", OmtTextAnchor.Bottom),
             R("city", "1", 16, "hsl(0, 0%, 13%)", 3, 3).WithHalo(Halo, 1.2f).WithIcon("place-capital-8", OmtTextAnchor.Bottom),
             R("city", "", 14, "hsl(0, 0%, 20%)", 4, 4).WithIcon("place-6", OmtTextAnchor.Bottom, 0.8f),
-            R("town", "", 13, "hsl(0, 0%, 20%)", 6, 5).WithHalo(Halo, 1.2f),
+            R("town", "", 13, "hsl(0, 0%, 20%)", 7, 5).WithHalo(Halo, 1.2f), // schema: z7
             R("village", "", 12, "hsl(0, 0%, 20%)", 9, 6).WithHalo(Halo, 1.2f),
             R("suburb", "", 12, "hsl(0, 0%, 40%)", 11, 7).WithHalo(Color.white, 1.5f),
             R("borough", "", 12, "hsl(0, 0%, 40%)", 11, 7).WithHalo(Color.white, 1.5f),
-            R("quarter", "", 12, "hsl(0, 0%, 47%)", 12, 8).WithHalo(Color.white, 1.5f),
-            R("neighbourhood", "", 11, "hsl(0, 0%, 47%)", 13, 8).WithHalo(Color.white, 1.5f),
+            R("quarter", "", 12, "hsl(0, 0%, 47%)", 14, 8).WithHalo(Color.white, 1.5f), // schema: z14
+            R("neighbourhood", "", 11, "hsl(0, 0%, 47%)", 14, 8).WithHalo(Color.white, 1.5f), // schema: z14
             R("hamlet", "", 11, "hsl(0, 0%, 27%)", 12, 8).WithHalo(Color.white, 1.5f),
             R("isolated_dwelling", "", 10, "hsl(0, 0%, 33%)", 14, 9).WithHalo(Color.white, 1.5f),
             R("island", "", 12, "hsl(0, 0%, 27%)", 8, 7).WithFont(OmtFontStyle.Italic).WithHalo(Color.white, 1.5f),
@@ -58,7 +63,8 @@ namespace GeoFoundry.OpenMapTiles
 
             // Specific subclasses first.
             rules.Add(R("railway", "", 11, "hsl(232, 41%, 48%)", 12, 0).WithIcon("square_train").WithWrap(8));
-            rules.Add(R("zoo", "zoo", 12, "hsl(330, 100%, 20%)", 12, 1).WithIcon("{subclass}").WithWrap(8));
+            // schema: z12–13 carry only railway stations, halts, ferry terminals and large universities; the rest z14.
+            rules.Add(R("zoo", "zoo", 12, "hsl(330, 100%, 20%)", 14, 1).WithIcon("{subclass}").WithWrap(8));
             rules.Add(R("shop", "mall", 12, "hsl(7, 100%, 41%)", 15, 1).WithWrap(8));
             rules.Add(R("park", "park", 11, "hsl(125, 83%, 28%)", 15, 2).WithWrap(8));
             rules.Add(R("bus", "bus_stop", 11, "hsl(216, 100%, 50%)", 17, 3).WithIcon("bus_stop.12").WithWrap(8));
@@ -118,7 +124,9 @@ namespace GeoFoundry.OpenMapTiles
             string[] classes = { "international", "public", "regional", "military", "private", "other" };
             for (int i = 0; i < classes.Length; i++)
             {
-                rules.Add(R(classes[i], "", i == 0 ? 12 : 11, "hsl(261, 46%, 43%)", 8 + i * 0.75f, i)
+                // schema: z8–9 carry only international airports with an IATA code, the rest from z10.
+                float minZoom = i == 0 ? 8f : Mathf.Max(10f, 8f + i * 0.75f);
+                rules.Add(R(classes[i], "", i == 0 ? 12 : 11, "hsl(261, 46%, 43%)", minZoom, i)
                     .WithFont(OmtFontStyle.Italic).WithIcon("aerodrome.12").WithWrap(9));
             }
             rules.Add(R("", "", 11, "hsl(261, 46%, 43%)", 12, 6).WithFont(OmtFontStyle.Italic).WithIcon("aerodrome.12").WithWrap(9));
@@ -131,7 +139,7 @@ namespace GeoFoundry.OpenMapTiles
         {
             R("ocean", "", 16, "hsl(210, 39%, 45%)", 0, 0).WithFont(OmtFontStyle.Italic).WithHalo(new Color(1, 1, 1, 0.6f), 1f).WithWrap(6),
             R("sea", "", 13, "hsl(210, 39%, 45%)", 3, 1).WithFont(OmtFontStyle.Italic).WithHalo(new Color(1, 1, 1, 0.6f), 1f).WithWrap(6),
-            R("bay", "", 11, "hsl(210, 39%, 49%)", 8, 2).WithFont(OmtFontStyle.Italic).WithWrap(5),
+            R("bay", "", 11, "hsl(210, 39%, 49%)", 13, 2).WithFont(OmtFontStyle.Italic).WithWrap(5), // schema: z13
             R("strait", "", 11, "hsl(210, 39%, 49%)", 8, 2).WithFont(OmtFontStyle.Italic).WithWrap(5),
             R("lake", "", 11, "hsl(210, 39%, 49%)", 9, 3).WithWrap(5),
             R("", "", 11, "hsl(210, 39%, 49%)", 12, 4).WithWrap(5),
@@ -140,7 +148,7 @@ namespace GeoFoundry.OpenMapTiles
         /// <summary>Labels along lake center lines.</summary>
         public static List<OmtLabelRule> WaterNameLines() => new List<OmtLabelRule>
         {
-            R("", "", 12, "hsl(238, 43%, 55%)", 0, 3).WithHalo(new Color(1, 1, 1, 0.7f), 1f),
+            R("", "", 12, "hsl(238, 43%, 55%)", 3, 3).WithHalo(new Color(1, 1, 1, 0.7f), 1f), // schema: z3
         };
 
         // ---- waterway ---------------------------------------------------------

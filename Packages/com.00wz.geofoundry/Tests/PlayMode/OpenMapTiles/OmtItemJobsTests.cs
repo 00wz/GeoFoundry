@@ -78,7 +78,7 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
         }
 
         [Test]
-        public void LineItems_EmitCasingsThenFillsThenOverlays_WithDashInMeters()
+        public void LineItems_EmitCasingsThenFillsThenOverlays_WithShaderWidths()
         {
             using var tile = new OmtTestTile("transportation")
                 .Line(Segment, ("class", "rail"))
@@ -96,12 +96,14 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
                 Assert.That(secondary.Length, Is.EqualTo(0));
                 Assert.That(primary.Length, Is.EqualTo(4), "road casing, road fill, rail fill, rail overlay");
                 Assert.That(primary[0].FeatureIndex, Is.EqualTo(1));
-                Assert.That(primary[0].WidthMeters, Is.EqualTo(12f).Within(1e-3f), "casing adds 1 m per side");
+                Assert.That(primary[0].Width.Evaluate(0.1f), Is.EqualTo(12f).Within(1e-3f), "casing adds 1 m per side");
+                Assert.That(primary[0].Width.ExtraMeters, Is.EqualTo(1f), "the border is evaluated by the shader");
                 Assert.That(primary[1].FeatureIndex, Is.EqualTo(1), "fills ordered by rule order: road first");
-                Assert.That(primary[1].Dash.x, Is.EqualTo(10f).Within(1e-3f), "dash 1 width = 10 m");
+                Assert.That(primary[1].Dash, Is.EqualTo(new float2(1f, 1f)), "dashes in core widths");
+                Assert.That(primary[1].MinZoom, Is.EqualTo(0f), "the rule's min zoom");
                 Assert.That(primary[2].FeatureIndex, Is.EqualTo(0));
-                Assert.That(primary[3].WidthMeters, Is.EqualTo(2f).Within(1e-3f), "overlay is half the rail width");
-                Assert.That(primary[3].Dash, Is.EqualTo(new float2(8f, 8f)));
+                Assert.That(primary[3].Width.Evaluate(0.1f), Is.EqualTo(2f).Within(1e-3f), "overlay is half the rail width");
+                Assert.That(primary[3].Dash, Is.EqualTo(new float2(4f, 4f)), "2 rail widths = 4 overlay widths");
             }
             finally
             {
@@ -192,7 +194,6 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
                     Rules = nativeRules,
                     Zoom = 14,
                     MercatorScale = 1f,
-                    MetersPerPixel = 1f,
                     Tunnels = OmtTunnelMode.Dim,
                     BridgeCasing = new Color32(0, 0, 0, 255),
                     White = new Color32(255, 255, 255, 255),
@@ -216,7 +217,7 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
 
                 foreach (var item in output)
                     if (item.FeatureIndex == 4 && item.Color.Equals(OmtColor.ToVertex(Color.yellow)))
-                        Assert.That(item.WidthMeters, Is.EqualTo(5f).Within(1e-3f), "ramp halves the width");
+                        Assert.That(item.Width.Evaluate(0.01f), Is.EqualTo(5f).Within(1e-3f), "ramp halves the width");
             }
             finally
             {
@@ -268,7 +269,6 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
                 SubclassKey = OmtRules.Fixed(pass.SubclassKey),
                 Zoom = 14,
                 MercatorScale = 1f,
-                MetersPerPixel = 1f,
                 IncludeLines = pass.Lines,
                 OutlinePolygons = pass.Outlines,
                 Primary = primary,

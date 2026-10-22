@@ -43,7 +43,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             var normals = new NativeList<float3>(Allocator.TempJob);
             var uvs = new NativeList<float2>(Allocator.TempJob);
             var colors = new NativeList<Color32>(Allocator.TempJob);
-            var uv1 = new NativeList<float2>(Allocator.TempJob);
+            var lineVertices = new NativeList<LineVertex>(Allocator.TempJob);
             var drawItems = new NativeArray<LineDrawItem>(0, Allocator.TempJob);
             var triangles = new NativeList<int>(Allocator.TempJob);
             var ranges = new NativeList<MeshRange>(Allocator.TempJob);
@@ -70,7 +70,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                     Normals = normals,
                     Uvs = uvs,
                     Colors = colors,
-                    Uv1 = uv1,
+                    LineVertices = lineVertices,
                     Triangles = triangles,
                     Ranges = ranges,
                     RangeFeatureIndices = rangeFeatureIndices,
@@ -128,7 +128,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                 normals.Dispose();
                 uvs.Dispose();
                 colors.Dispose();
-                uv1.Dispose();
+                lineVertices.Dispose();
                 drawItems.Dispose();
                 triangles.Dispose();
                 ranges.Dispose();
@@ -153,7 +153,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             var normals = new NativeList<float3>(Allocator.TempJob);
             var uvs = new NativeList<float2>(Allocator.TempJob);
             var colors = new NativeList<Color32>(Allocator.TempJob);
-            var uv1 = new NativeList<float2>(Allocator.TempJob);
+            var lineVertices = new NativeList<LineVertex>(Allocator.TempJob);
             var drawItems = new NativeArray<LineDrawItem>(0, Allocator.TempJob);
             var triangles = new NativeList<int>(Allocator.TempJob);
             var ranges = new NativeList<MeshRange>(Allocator.TempJob);
@@ -179,7 +179,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                     Normals = normals,
                     Uvs = uvs,
                     Colors = colors,
-                    Uv1 = uv1,
+                    LineVertices = lineVertices,
                     Triangles = triangles,
                     Ranges = ranges,
                     RangeFeatureIndices = rangeFeatureIndices,
@@ -204,7 +204,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                 normals.Dispose();
                 uvs.Dispose();
                 colors.Dispose();
-                uv1.Dispose();
+                lineVertices.Dispose();
                 drawItems.Dispose();
                 triangles.Dispose();
                 ranges.Dispose();
@@ -235,7 +235,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             var normals = new NativeList<float3>(Allocator.TempJob);
             var uvs = new NativeList<float2>(Allocator.TempJob);
             var colors = new NativeList<Color32>(Allocator.TempJob);
-            var uv1 = new NativeList<float2>(Allocator.TempJob);
+            var lineVertices = new NativeList<LineVertex>(Allocator.TempJob);
             var drawItems = new NativeArray<LineDrawItem>(0, Allocator.TempJob);
             var triangles = new NativeList<int>(Allocator.TempJob);
             var ranges = new NativeList<MeshRange>(Allocator.TempJob);
@@ -262,7 +262,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                     Normals = normals,
                     Uvs = uvs,
                     Colors = colors,
-                    Uv1 = uv1,
+                    LineVertices = lineVertices,
                     Triangles = triangles,
                     Ranges = ranges,
                     RangeFeatureIndices = rangeFeatureIndices,
@@ -295,7 +295,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                 normals.Dispose();
                 uvs.Dispose();
                 colors.Dispose();
-                uv1.Dispose();
+                lineVertices.Dispose();
                 drawItems.Dispose();
                 triangles.Dispose();
                 ranges.Dispose();
@@ -371,7 +371,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             var normals = new NativeList<float3>(Allocator.TempJob);
             var uvs = new NativeList<float2>(Allocator.TempJob);
             var colors = new NativeList<Color32>(Allocator.TempJob);
-            var uv1 = new NativeList<float2>(Allocator.TempJob);
+            var lineVertices = new NativeList<LineVertex>(Allocator.TempJob);
             var drawItems = new NativeArray<LineDrawItem>(0, Allocator.TempJob);
             var triangles = new NativeList<int>(Allocator.TempJob);
             var ranges = new NativeList<MeshRange>(Allocator.TempJob);
@@ -398,7 +398,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                     Normals = normals,
                     Uvs = uvs,
                     Colors = colors,
-                    Uv1 = uv1,
+                    LineVertices = lineVertices,
                     Triangles = triangles,
                     Ranges = ranges,
                     RangeFeatureIndices = rangeFeatureIndices,
@@ -436,7 +436,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                 normals.Dispose();
                 uvs.Dispose();
                 colors.Dispose();
-                uv1.Dispose();
+                lineVertices.Dispose();
                 drawItems.Dispose();
                 triangles.Dispose();
                 ranges.Dispose();

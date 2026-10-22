@@ -24,8 +24,12 @@ Initial release.
   other schema or layer is supported through custom `ILayerHandler`s.
 - Label rendering: runtime SDF glyph atlases (the engine's TextCore font engine, Noto Sans included; no
   TextMeshPro resources needed), an icon atlas built from the style's icons, per-tile decluttering across label
-  layers over display-zoom tiers, and the `GeoFoundry/Label` shader.
-- `GeoFoundry/Line Lit` shader (Surface Lit with dashes) and ordered draw-list geometry:
+  layers over display-zoom tiers matched to the tile screen size (`OmtTextSettings.TileScreenSizePixels`), and the
+  `GeoFoundry/Label` shader (whole labels fade when their anchor is occluded, tested against the camera depth
+  texture as in MapLibre, never cut by the ground or buildings; a per-pixel depth-buffer mode without the depth
+  texture).
+- `GeoFoundry/Line Lit` shader (Surface Lit with dashes and line widths evaluated per frame at the camera's pixel
+  size, as in MapLibre: `LineWidth`, `MapViewShaderGlobals`) and ordered draw-list geometry:
   `AsyncGeometryWorker.BuildLineMeshAsync`, a draw-item overload of `BuildSurfaceMeshAsync`, `GroundAnchors`.
 - Floating origin based on a double-precision Mercator pivot.
 - `MapCameraRig` camera: orbit and free modes, desktop and touch input. Requires the Input System package;

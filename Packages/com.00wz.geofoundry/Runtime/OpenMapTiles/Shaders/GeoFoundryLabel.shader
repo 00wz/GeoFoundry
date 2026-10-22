@@ -12,8 +12,15 @@
 // and adds it in clip space. The display zoom at the anchor (from the camera distance and field of view, in the
 // MapLibre convention where the world is 512 * 2^zoom pixels wide and scene units are Web Mercator meters) fades
 // the label in at its min zoom and out at its max zoom, which is how decluttering tiers take effect.
-// Depth: the whole quad uses the depth of the anchor pulled toward the camera by _DepthPull, so labels inside
-// buildings stay visible while labels behind hills are hidden; set _ZTest to Always to never hide labels.
+// Occlusion. Both modes use the anchor pulled toward the camera by _DepthPull, so labels of POIs inside buildings
+// stay visible:
+//   Depth Texture (as MapLibre's calculate_visibility on terrain): the vertex shader compares the pulled anchor with
+//     the camera depth texture at a few points around it and fades the whole label by the visible fraction; the quad
+//     is then drawn at the near plane, so the ground and buildings never cut it. Needs the Depth Texture of the URP
+//     asset; MapViewShaderGlobals publishes per camera whether it is available (_GeoFoundryDepthOcclusion).
+//   Depth Buffer (also the fallback without the depth texture): the whole quad gets the depth of the pulled anchor
+//     and is depth-tested per pixel, so labels behind hills and buildings are hidden, but parts of a label can be cut
+//     where the ground or a building in front comes closer than the pulled anchor.
 // ============================================================================
 Shader "GeoFoundry/Label"
 {
@@ -21,9 +28,9 @@ Shader "GeoFoundry/Label"
     {
         [MainTexture] _MainTex("Atlas", 2D) = "white" {}
         _LabelScale("Size Multiplier", Range(0.25, 4)) = 1
+        [Enum(Depth Buffer, 0, Depth Texture, 1)] _Occlusion("Occlusion", Float) = 1
         _DepthPull("Depth Pull (m)", Float) = 60
         _FadeRange("Zoom Fade Range", Range(0.05, 1)) = 0.25
-        [Enum(UnityEngine.Rendering.CompareFunction)] _ZTest("ZTest", Float) = 4
     }
 
     SubShader
@@ -44,7 +51,7 @@ Shader "GeoFoundry/Label"
 
             Blend SrcAlpha OneMinusSrcAlpha
             ZWrite Off
-            ZTest [_ZTest]
+            ZTest LEqual
             Cull Off
 
             HLSLPROGRAM
@@ -54,6 +61,7 @@ Shader "GeoFoundry/Label"
             #pragma multi_compile_instancing
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 
             TEXTURE2D(_MainTex);
             SAMPLER(sampler_MainTex);
@@ -61,10 +69,13 @@ Shader "GeoFoundry/Label"
             CBUFFER_START(UnityPerMaterial)
                 float4 _MainTex_ST;
                 float _LabelScale;
+                float _Occlusion;
                 float _DepthPull;
                 float _FadeRange;
-                float _ZTest;
             CBUFFER_END
+
+            // Set per camera by MapViewShaderGlobals: 1 if the camera depth texture is available.
+            float _GeoFoundryDepthOcclusion;
 
             #define WORLD_SIZE_METERS 40075016.685578488
             #define TILE_PIXELS 512.0
@@ -102,6 +113,43 @@ Shader "GeoFoundry/Label"
                 return log2(WORLD_SIZE_METERS / (TILE_PIXELS * mpp));
             }
 
+            // Eye depth of the scene at a screen UV (sampled in the vertex shader, hence the explicit LOD; the UV is
+            // mapped like SampleSceneDepth in DeclareDepthTexture.hlsl, which also handles render scaling).
+            float SceneEyeDepth(float2 uv)
+            {
+                uv = ClampAndScaleUVForBilinear(UnityStereoTransformScreenSpaceTex(saturate(uv)),
+                    _CameraDepthTexture_TexelSize.xy);
+                float raw = SAMPLE_TEXTURE2D_X_LOD(_CameraDepthTexture, sampler_PointClamp, uv, 0).r;
+                if (unity_OrthoParams.w > 0.5)
+                {
+                #if UNITY_REVERSED_Z
+                    raw = 1.0 - raw;
+                #endif
+                    return lerp(_ProjectionParams.y, _ProjectionParams.z, raw);
+                }
+                return LinearEyeDepth(raw, _ZBufferParams);
+            }
+
+            // Visible fraction of the anchor: the pulled anchor against the scene depth at the anchor and four points
+            // 2 px around it, so a label on the edge of a building fades instead of popping.
+            float AnchorVisibility(float4 anchorCS, float3 pulledWS)
+            {
+                float2 ndc = anchorCS.xy / anchorCS.w;
+                float2 uv = ndc * 0.5 + 0.5;
+                if (_ProjectionParams.x < 0.0) uv.y = 1.0 - uv.y; // flipped projection: back to texture space
+                if (any(uv < 0.0) || any(uv > 1.0)) return 1.0;  // anchor off screen: nothing to test against
+
+                float eye = -TransformWorldToView(pulledWS).z;
+                float2 px = 2.0 / _ScreenParams.xy;
+                float visible = 0.0;
+                visible += step(eye, SceneEyeDepth(uv));
+                visible += step(eye, SceneEyeDepth(uv + float2(px.x, 0)));
+                visible += step(eye, SceneEyeDepth(uv - float2(px.x, 0)));
+                visible += step(eye, SceneEyeDepth(uv + float2(0, px.y)));
+                visible += step(eye, SceneEyeDepth(uv - float2(0, px.y)));
+                return visible / 5.0;
+            }
+
             Varyings Vert(Attributes input)
             {
                 Varyings output = (Varyings)0;
@@ -111,15 +159,17 @@ Shader "GeoFoundry/Label"
                 float3 anchorWS = TransformObjectToWorld(input.positionOS);
                 float4 clip = TransformWorldToHClip(anchorWS);
 
-                // Depth of the anchor pulled toward the camera.
+                // The anchor pulled toward the camera, for the occlusion test.
                 float3 toCamera = GetCameraPositionWS() - anchorWS;
                 float camDist = length(toCamera);
                 float3 pulledWS = anchorWS + toCamera / max(camDist, 1e-3) * min(_DepthPull, camDist * 0.9);
-                float4 pulledCS = TransformWorldToHClip(pulledWS);
 
                 // Zoom fade.
                 float zoom = DisplayZoom(anchorWS);
                 float fade = saturate((zoom - input.uv1.z) / _FadeRange) * saturate((input.uv1.w - zoom) / _FadeRange);
+                bool depthTexture = _Occlusion > 0.5 && _GeoFoundryDepthOcclusion > 0.5;
+                if (depthTexture && fade > 0.0 && clip.w > 0.0) fade *= AnchorVisibility(clip, pulledWS);
+                float4 pulledCS = TransformWorldToHClip(pulledWS);
 
                 // Pixel offset, optionally rotated to the screen direction of the tangent.
                 float2 offset = input.uv1.xy * _LabelScale;
@@ -140,9 +190,13 @@ Shader "GeoFoundry/Label"
                 offset.y *= _ProjectionParams.x;
                 clip.xy += offset * (2.0 / _ScreenParams.xy) * clip.w;
 
-                // Behind the camera or faded out: collapse the vertex outside the clip volume.
+                // Behind the camera, faded out or occluded: collapse the vertex outside the clip volume. Otherwise
+                // the whole quad gets one depth: the near plane (occlusion already tested, never cut) or the pulled
+                // anchor (tested per pixel against the depth buffer).
                 if (clip.w <= 0.0 || fade <= 0.0)
                     clip = float4(0, 0, -2, 1);
+                else if (depthTexture)
+                    clip.z = UNITY_NEAR_CLIP_VALUE * 0.9999 * clip.w;
                 else
                     clip.z = pulledCS.z / pulledCS.w * clip.w;
 

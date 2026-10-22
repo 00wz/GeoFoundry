@@ -25,7 +25,7 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
         private static readonly MercatorPivot Frame = MercatorPivot.FromLonLat(37.6, 55.75);
 
         [UnityTest]
-        public IEnumerator LineMesh_DrawItems_WriteDashToTexCoord1_AndOutlinePolygons() => OmtTestTile.Run(async ct =>
+        public IEnumerator LineMesh_DrawItems_WriteLineAttributes_AndOutlinePolygons() => OmtTestTile.Run(async ct =>
         {
             using var tile = new OmtTestTile("t")
                 .Line(new[] { new int2(500, 500), new int2(3500, 500) })
@@ -34,26 +34,51 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
             using var ground = new FlatGroundGridProvider();
             var items = new NativeArray<LineDrawItem>(new[]
             {
-                new LineDrawItem(0, 8f, new Color32(255, 0, 0, 255), new float2(5f, 3f)),
-                new LineDrawItem(1, 4f, new Color32(0, 255, 0, 255), default, LineDrawFlags.PolygonOutline),
+                new LineDrawItem(0, new LineWidth(8f, 2f), new Color32(255, 0, 0, 255), new float2(0.5f, 0.25f),
+                    LineDrawFlags.None, 13f),
+                new LineDrawItem(1, new LineWidth(4f), new Color32(0, 255, 0, 255), default, LineDrawFlags.PolygonOutline),
             }, Allocator.Persistent);
             try
             {
                 var mesh = await AsyncGeometryWorker.BuildLineMeshAsync(
-                    tile.GetLayer(0), items, Coord, GroundTestUtils.FlatGrid(ground, Coord), Frame, ct);
+                    tile.GetLayer(0), items, Coord, GroundTestUtils.FlatGrid(ground, Coord), Frame, 1f, ct);
                 Assert.That(mesh, Is.Not.Null);
-                Assert.That(mesh.HasVertexAttribute(VertexAttribute.TexCoord1), Is.True);
-                var uv1 = new System.Collections.Generic.List<Vector2>();
-                mesh.GetUVs(1, uv1);
-                var colors = mesh.colors32;
-                bool dashed = false, outline = false;
-                for (int i = 0; i < uv1.Count; i++)
+                Assert.That(mesh.vertexBufferCount, Is.EqualTo(4), "within the WebGL limit of 4 vertex streams");
+                for (int c = 0; c < 3; c++)
                 {
-                    if (colors[i].r == 255 && uv1[i] == new Vector2(5f, 3f)) dashed = true;
-                    if (colors[i].g == 255 && uv1[i] == Vector2.zero) outline = true;
+                    var attribute = VertexAttribute.TexCoord0 + c;
+                    Assert.That(mesh.GetVertexAttributeDimension(attribute), Is.EqualTo(4), attribute.ToString());
+                    Assert.That(mesh.GetVertexAttributeStream(attribute), Is.EqualTo(2), attribute.ToString());
                 }
-                Assert.That(dashed, Is.True, "the line carries its dash pattern");
-                Assert.That(outline, Is.True, "the polygon outline is emitted (solid)");
+
+                var uv0 = new System.Collections.Generic.List<Vector4>();
+                var uv1 = new System.Collections.Generic.List<Vector4>();
+                var uv2 = new System.Collections.Generic.List<Vector4>();
+                mesh.GetUVs(0, uv0);
+                mesh.GetUVs(1, uv1);
+                mesh.GetUVs(2, uv2);
+                var positions = mesh.vertices;
+                var colors = mesh.colors32;
+                bool line = false, outline = false;
+                float axisZ = float.NaN;
+                for (int i = 0; i < positions.Length; i++)
+                {
+                    if (colors[i].r == 255)
+                    {
+                        line = true;
+                        Assert.That(uv1[i], Is.EqualTo(new Vector4(8f, 2f, 0f, 0f)), "the item's LineWidth");
+                        Assert.That(uv2[i], Is.EqualTo(new Vector4(0.5f, 0.25f, 4f, 13f)), "dash, built half width, min zoom");
+                        // The line runs along X: the extrusion is across it (Z) and leads back to the axis.
+                        Assert.That(uv0[i].z, Is.EqualTo(0f).Within(1e-4f));
+                        Assert.That(Mathf.Abs(uv0[i].w), Is.LessThanOrEqualTo(1f + 1e-4f));
+                        float z = positions[i].z - uv0[i].w * 4f;
+                        if (float.IsNaN(axisZ)) axisZ = z;
+                        Assert.That(z, Is.EqualTo(axisZ).Within(1e-2f), "every vertex resolves to the line axis");
+                    }
+                    if (colors[i].g == 255 && uv2[i].x == 0f && uv2[i].z == 2f) outline = true;
+                }
+                Assert.That(line, Is.True);
+                Assert.That(outline, Is.True, "the polygon outline is emitted (solid, half width 2 m)");
                 Object.Destroy(mesh);
             }
             finally
@@ -109,20 +134,76 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
                 .Point(-20, 1000)         // 3: in the buffer: rejected
                 .Line(new[] { new int2(200, 3500), new int2(3800, 3500) }) // 4: line label
                 .Build();
-            using var ground = new FlatGroundGridProvider();
 
+            var requests = new NativeArray<OmtLabelRequest>(5, Allocator.TempJob);
+            for (int i = 0; i < 4; i++) requests[i] = OmtLabelRequest.Create(i, OmtLabelKind.Point, 0, Text, i);
+            var lineRequest = OmtLabelRequest.Create(4, OmtLabelKind.Line, 0, Text, 4);
+            lineRequest.Spacing = 1000f; // longer than the line: one label in the middle
+            requests[4] = lineRequest;
+
+            RunLayout(tile, requests, firstTier: 0, lastTier: 5, (positions, vertices, indices, subMeshes) =>
+            {
+                Assert.That(positions.Length, Is.EqualTo(3 * QuadsPerLabel * 4), "labels 0, 1 and the line label");
+                Assert.That(subMeshes.Length, Is.EqualTo(1));
+                Assert.That(subMeshes[0].x, Is.EqualTo(1), "glyph texture slot");
+                Assert.That(indices.Length, Is.EqualTo(3 * QuadsPerLabel * 6));
+
+                const int vPerLabel = QuadsPerLabel * 4;
+                Assert.That(vertices[0].Uv1.z, Is.EqualTo(14f), "the first label shows from the tile zoom");
+                Assert.That(vertices[vPerLabel].Uv1.z, Is.GreaterThan(14f), "the overlapping label appears at a deeper zoom");
+                Assert.That(vertices[2 * vPerLabel].Uv2.w, Is.EqualTo(1f), "line labels rotate along the line (kept upright)");
+                Assert.That(math.length(vertices[2 * vPerLabel].Uv2.xyz), Is.EqualTo(1f).Within(1e-3f));
+                Assert.That(positions[0].y, Is.EqualTo(2f).Within(1e-4f), "anchors are lifted above flat ground");
+            });
+        }
+
+        [Test]
+        public void LabelLayout_NegativeTiers_ShowLabelsBelowTheTileZoom()
+        {
+            using var tile = new OmtTestTile("place")
+                .Point(2000, 2000)        // 0: placed from the first tier
+                .Point(2040, 2000)        // 1: overlaps 0 down to tier 2
+                .Point(1000, 1000)        // 2: alone, but its style shows it from zoom 15
+                .Build();
+
+            var requests = new NativeArray<OmtLabelRequest>(3, Allocator.TempJob);
+            for (int i = 0; i < 3; i++) requests[i] = OmtLabelRequest.Create(i, OmtLabelKind.Point, 0, Text, i);
+            var late = requests[2];
+            late.MinZoom = 15f;
+            requests[2] = late;
+
+            RunLayout(tile, requests, firstTier: -3, lastTier: 4, (positions, vertices, indices, subMeshes) =>
+            {
+                const int vPerLabel = QuadsPerLabel * 4;
+                Assert.That(positions.Length, Is.EqualTo(3 * vPerLabel));
+                Assert.That(vertices[0].Uv1.z, Is.EqualTo(11f), "tier -3: shown from three zooms below the tile zoom");
+                Assert.That(vertices[vPerLabel].Uv1.z, Is.GreaterThan(11f).And.LessThanOrEqualTo(18f),
+                    "the overlapping label appears deeper, within the tiers");
+                Assert.That(vertices[2 * vPerLabel].Uv1.z, Is.EqualTo(15f), "the style min zoom still applies");
+            });
+        }
+
+        // ---- label layout helpers -------------------------------------------
+
+        private static readonly FixedString128Bytes Text = "AB AB";
+        private const int QuadsPerLabel = 4; // "AB AB": four glyph quads, the space has none
+
+        /// <summary>
+        /// Runs <see cref="OmtLabelLayoutJob"/> over layer 0 of <paramref name="tile"/> with one 12 px text rule and
+        /// fake glyphs for "A", "B" and space, then calls <paramref name="check"/> with the outputs. Disposes
+        /// <paramref name="requests"/>.
+        /// </summary>
+        private static void RunLayout(GeoFoundry.Core.Mvt.NativeMvtTile tile, NativeArray<OmtLabelRequest> requests,
+            int firstTier, int lastTier,
+            System.Action<NativeList<float3>, NativeList<OmtLabelVertex>, NativeList<int>, NativeList<int3>> check)
+        {
+            using var ground = new FlatGroundGridProvider();
             var rules = new NativeArray<OmtLabelRuleData>(1, Allocator.TempJob);
             rules[0] = new OmtLabelRuleData
             {
                 Size = 12f, Color = new Color32(0, 0, 0, 255), HaloWidth = 1f, MaxWidth = 8f, MinZoom = 0f, MaxZoom = 24f,
                 Visible = true,
             };
-            var requests = new NativeArray<OmtLabelRequest>(5, Allocator.TempJob);
-            FixedString128Bytes text = "AB AB";
-            for (int i = 0; i < 4; i++) requests[i] = OmtLabelRequest.Create(i, OmtLabelKind.Point, 0, text, i);
-            var lineRequest = OmtLabelRequest.Create(4, OmtLabelKind.Line, 0, text, 4);
-            lineRequest.Spacing = 1000f; // longer than the line: one label in the middle
-            requests[4] = lineRequest;
 
             var glyphs = new NativeHashMap<int, OmtGlyphInfo>(4, Allocator.TempJob);
             var g = new OmtGlyphInfo { Uv = new float4(0, 0, 0.1f, 0.1f), Quad = new float4(0, 0, 0.5f, 0.7f), Advance = 0.6f, Slot = 1 };
@@ -149,23 +230,12 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
                     GeomTypes = layer.FeatureGeomTypesSlice, FeatureRingRange = layer.FeatureRingRangeSlice,
                     Rings = layer.Rings, RingPoints = layer.RingPoints, Coord = Coord, Extent = layer.Extent,
                     Grid = GroundTestUtils.FlatGrid(ground, Coord), LocalFrame = Frame, Lift = 2f, TileZoom = 14f,
-                    Tiers = 5, Padding = 2f,
+                    FirstTier = firstTier, LastTier = lastTier, Padding = 2f,
                     Positions = positions, Vertices = vertices, Colors = colors,
                     Indices = indices, SubMeshes = subMeshes, Bounds = bounds, Occupancy = occupancy, Occupy = true,
                 }.Run();
 
-                const int quadsPerLabel = 4; // "AB AB": four glyph quads, the space has none
-                Assert.That(positions.Length, Is.EqualTo(3 * quadsPerLabel * 4), "labels 0, 1 and the line label");
-                Assert.That(subMeshes.Length, Is.EqualTo(1));
-                Assert.That(subMeshes[0].x, Is.EqualTo(1), "glyph texture slot");
-                Assert.That(indices.Length, Is.EqualTo(3 * quadsPerLabel * 6));
-
-                int vPerLabel = quadsPerLabel * 4;
-                Assert.That(vertices[0].Uv1.z, Is.EqualTo(14f), "the first label shows from the tile zoom");
-                Assert.That(vertices[vPerLabel].Uv1.z, Is.GreaterThan(14f), "the overlapping label appears at a deeper zoom");
-                Assert.That(vertices[2 * vPerLabel].Uv2.w, Is.EqualTo(1f), "line labels rotate along the line (kept upright)");
-                Assert.That(math.length(vertices[2 * vPerLabel].Uv2.xyz), Is.EqualTo(1f).Within(1e-3f));
-                Assert.That(positions[0].y, Is.EqualTo(2f).Within(1e-4f), "anchors are lifted above flat ground");
+                check(positions, vertices, indices, subMeshes);
             }
             finally
             {

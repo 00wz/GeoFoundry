@@ -6,7 +6,8 @@ namespace GeoFoundry.OpenMapTiles
 {
     /// <summary>
     /// Handler of the OpenMapTiles <c>poi</c> layer: points of interest as icons named after <c>subclass</c> (falling
-    /// back to <c>class</c>) with their <c>name</c>, colored and zoom-gated by class, placed by <c>rank</c>. Indoor POIs
+    /// back to <c>class</c>) with their <c>name</c>, colored, zoom-gated and placed by class (<c>rank</c>, local to each zoom's label grid in the schema, only
+    /// filters). Indoor POIs
     /// (<c>indoor=1</c>) and POIs on other <c>level</c>s can be hidden; with <c>agg_stop</c> only one stop of a group of
     /// equally named public transport stops is labeled.
     /// </summary>

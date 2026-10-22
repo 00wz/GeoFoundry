@@ -1,10 +1,12 @@
 // GeoFoundry — Line Lit
 // ============================================================================
 // GeoFoundry/Surface Lit (see GeoFoundrySurfaceLit.shader for the base changes against URP Lit: ZTest Always,
-// render-queue ordering through _QueueOffset, per-vertex color) plus dashing: the ForwardLit and GBuffer passes
-// compile the forked passes with #define GEOFOUNDRY_DASH, which discards fragments in the gaps of the dash pattern
-// stored in TEXCOORD1 (dash, gap in meters) along the distance stored in TEXCOORD0.y. Meshes without TEXCOORD1 read
-// (0, 0) and render solid, so the shader also works for fills.
+// render-queue ordering through _QueueOffset, per-vertex color) plus line support: the ForwardLit and GBuffer passes
+// compile the forked passes with #define GEOFOUNDRY_LINE, and DepthOnly/DepthNormals use GeoFoundryLineDepthPass.hlsl.
+// Every pass resizes the ribbons at the camera's pixel size (_GeoFoundryMetersPerPixel, see GeoFoundryLineWidth.hlsl)
+// and discards fragments in the gaps of the dash pattern. The line attributes reuse the lightmap UV channels, so the
+// color passes compile without the lightmap keywords. Meshes without the attributes render at their built width,
+// solid.
 //
 // Usage: line meshes built by AsyncGeometryWorker.BuildLineMeshAsync (OpenMapTiles roads, rails, waterways,
 // boundaries, outlines). Set the draw order through Advanced Options → Priority (_QueueOffset), see OmtDrawOrder.
@@ -168,14 +170,8 @@ Shader "GeoFoundry/Line Lit"
 
             // -------------------------------------
             // Unity defined keywords
-            #pragma multi_compile _ LIGHTMAP_SHADOW_MIXING
             #pragma multi_compile _ SHADOWS_SHADOWMASK
-            #pragma multi_compile _ DIRLIGHTMAP_COMBINED
-            #pragma multi_compile _ LIGHTMAP_ON
-            #pragma multi_compile_fragment _ LIGHTMAP_BICUBIC_SAMPLING
             #pragma multi_compile_fragment _ REFLECTION_PROBE_ROTATION
-            #pragma multi_compile _ DYNAMICLIGHTMAP_ON
-            #pragma multi_compile _ USE_LEGACY_LIGHTMAPS
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma multi_compile_fragment _ DEBUG_DISPLAY
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
@@ -188,7 +184,7 @@ Shader "GeoFoundry/Line Lit"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
 
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
-            #define GEOFOUNDRY_DASH
+            #define GEOFOUNDRY_LINE
             #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLitForwardPass.hlsl"
             ENDHLSL
         }
@@ -305,14 +301,8 @@ Shader "GeoFoundry/Line Lit"
 
             // -------------------------------------
             // Unity defined keywords
-            #pragma multi_compile _ LIGHTMAP_SHADOW_MIXING
             #pragma multi_compile _ SHADOWS_SHADOWMASK
-            #pragma multi_compile _ DIRLIGHTMAP_COMBINED
-            #pragma multi_compile _ LIGHTMAP_ON
-            #pragma multi_compile_fragment _ LIGHTMAP_BICUBIC_SAMPLING
             #pragma multi_compile_fragment _ REFLECTION_PROBE_ROTATION
-            #pragma multi_compile _ DYNAMICLIGHTMAP_ON
-            #pragma multi_compile _ USE_LEGACY_LIGHTMAPS
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
             #pragma multi_compile_fragment _ _SCREEN_SPACE_IRRADIANCE
@@ -327,7 +317,7 @@ Shader "GeoFoundry/Line Lit"
             // -------------------------------------
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
-            #define GEOFOUNDRY_DASH
+            #define GEOFOUNDRY_LINE
             #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLitGBufferPass.hlsl"
             ENDHLSL
         }
@@ -351,8 +341,8 @@ Shader "GeoFoundry/Line Lit"
 
             // -------------------------------------
             // Shader Stages
-            #pragma vertex DepthOnlyVertex
-            #pragma fragment DepthOnlyFragment
+            #pragma vertex GeoFoundryLineDepthVertex
+            #pragma fragment GeoFoundryLineDepthOnlyFragment
 
             // -------------------------------------
             // Material Keywords
@@ -371,7 +361,7 @@ Shader "GeoFoundry/Line Lit"
             // -------------------------------------
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
-            #include "Packages/com.unity.render-pipelines.universal/Shaders/DepthOnlyPass.hlsl"
+            #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLineDepthPass.hlsl"
             ENDHLSL
         }
 
@@ -394,8 +384,8 @@ Shader "GeoFoundry/Line Lit"
 
             // -------------------------------------
             // Shader Stages
-            #pragma vertex DepthNormalsVertex
-            #pragma fragment DepthNormalsFragment
+            #pragma vertex GeoFoundryLineDepthVertex
+            #pragma fragment GeoFoundryLineDepthNormalsFragment
 
             // -------------------------------------
             // Material Keywords
@@ -421,7 +411,7 @@ Shader "GeoFoundry/Line Lit"
             // -------------------------------------
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
-            #include "Packages/com.unity.render-pipelines.universal/Shaders/LitDepthNormalsPass.hlsl"
+            #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLineDepthPass.hlsl"
             ENDHLSL
         }
 

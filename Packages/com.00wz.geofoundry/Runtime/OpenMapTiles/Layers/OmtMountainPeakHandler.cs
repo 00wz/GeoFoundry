@@ -6,8 +6,8 @@ namespace GeoFoundry.OpenMapTiles
 {
     /// <summary>
     /// Handler of the OpenMapTiles <c>mountain_peak</c> layer: peaks, volcanoes and saddles as icons with their
-    /// <c>name</c> and elevation (<c>ele</c> in meters, or <c>ele_ft</c> in feet where <c>customary_ft=1</c>), ordered
-    /// by <c>rank</c>; ridges, aretes and cliffs (LineString features) as lines with names along them.
+    /// <c>name</c> and elevation (<c>ele</c> in meters, or <c>ele_ft</c> in feet where <c>customary_ft=1</c>) by
+    /// class priority (the schema's <c>rank</c> is local to each zoom's label grid); ridges, aretes and cliffs (LineString features) as lines with names along them.
     /// </summary>
     [CreateAssetMenu(menuName = "GeoFoundry/Layers/OpenMapTiles/Mountain Peak", fileName = "OmtMountainPeak")]
     public sealed class OmtMountainPeakHandler : OmtLayerHandler

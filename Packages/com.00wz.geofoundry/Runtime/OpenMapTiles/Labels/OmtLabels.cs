@@ -168,6 +168,7 @@ namespace GeoFoundry.OpenMapTiles
                 else icons = emptyIcons = new NativeArray<OmtIconInfo>(0, Allocator.Persistent);
 
                 int z = ctx.TileCoord.Z;
+                int2 tiers = OmtZoom.LabelTierRange(settings.TileScreenSizePixels);
                 var layout = new OmtLabelLayoutJob
                 {
                     Requests = requests,
@@ -185,7 +186,10 @@ namespace GeoFoundry.OpenMapTiles
                     LocalFrame = ctx.LocalFrame,
                     Lift = settings.AnchorLift,
                     TileZoom = z,
-                    Tiers = z >= settings.SourceMaxZoom ? settings.OverzoomLevels : 1,
+                    FirstTier = tiers.x,
+                    // Tiles of the source's maximum zoom are viewed much closer: declutter them down to the deepest
+                    // display zoom, SourceMaxZoom + OverzoomLevels.
+                    LastTier = z >= settings.SourceMaxZoom ? math.max(tiers.y, settings.OverzoomLevels) : tiers.y,
                     Padding = settings.CollisionPadding,
                     Occupancy = settings.GetOccupancy(ctx.TileRoot),
                     Occupy = occupy,

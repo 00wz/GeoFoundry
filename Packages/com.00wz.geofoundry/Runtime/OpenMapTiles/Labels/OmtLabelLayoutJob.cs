@@ -21,11 +21,13 @@ namespace GeoFoundry.OpenMapTiles
     /// rotates them to follow the line on screen.
     /// </para>
     /// <para>
-    /// Decluttering is precomputed per tile on display-zoom tiers: tier <c>t</c> is the tile viewed at zoom
-    /// <c>TileZoom + t</c>, where the tile is <c>512 · 2^t</c> pixels wide. Requests are placed greedily in priority
-    /// order; each label gets the lowest tier from which it collides with no higher-priority label on any deeper
-    /// tier, and that tier becomes its minimum display zoom, at which the shader fades it in. So tiles of the source's
-    /// maximum zoom, which are viewed at much deeper zooms, show progressively more labels as the camera approaches.
+    /// Decluttering is precomputed per tile on display-zoom tiers <see cref="FirstTier"/>..<see cref="LastTier"/>:
+    /// tier <c>t</c> is the tile viewed at zoom <c>TileZoom + t</c>, where the tile is <c>512 · 2^t</c> pixels wide
+    /// (negative tiers for tiles shown smaller than 512 pixels, see <see cref="OmtZoom.LabelTierRange"/>). Requests are
+    /// placed greedily in priority order; each label gets the lowest tier from which it collides with no
+    /// higher-priority label on any deeper tier, and that tier becomes its minimum display zoom, at which the shader
+    /// fades it in. So the labels match the size at which the tile is actually shown, and tiles of the source's maximum
+    /// zoom, which are viewed at much deeper zooms, show progressively more labels as the camera approaches.
     /// The placed boxes go to <see cref="Occupancy"/>, which is shared by all label layers of the tile (they are built
     /// one after another), so labels of different layers avoid each other too. Collisions across tile borders are not
     /// resolved.
@@ -55,8 +57,10 @@ namespace GeoFoundry.OpenMapTiles
 
         public float Lift;
         public float TileZoom;
-        /// <summary>Number of tiers above the tile zoom used for decluttering.</summary>
-        public int Tiers;
+        /// <summary>The lowest declutter tier (relative to the tile zoom, may be negative).</summary>
+        public int FirstTier;
+        /// <summary>The highest declutter tier; labels placed on it stay visible at deeper zooms.</summary>
+        public int LastTier;
         public float Padding;
 
         /// <summary>
@@ -121,6 +125,8 @@ namespace GeoFoundry.OpenMapTiles
                 int c = Rules[ra.Rule].Priority.CompareTo(Rules[rb.Rule].Priority);
                 if (c != 0) return c;
                 c = ra.Priority.CompareTo(rb.Priority);
+                if (c != 0) return c;
+                c = ra.Key.CompareTo(rb.Key);
                 return c != 0 ? c : a.Order.CompareTo(b.Order);
             }
         }
@@ -137,7 +143,7 @@ namespace GeoFoundry.OpenMapTiles
             var lineLen = new NativeList<float>(64, Allocator.Temp);
             var own = new NativeParallelMultiHashMap<int, float4>(64, Allocator.Temp);
             var quadSlots = new NativeList<int>(256, Allocator.Temp);
-            var fits = new NativeArray<bool>(Tiers + 1, Allocator.Temp);
+            var fits = new NativeArray<bool>(LastTier - FirstTier + 1, Allocator.Temp);
 
             Bounds[0] = new float3(float.MaxValue);
             Bounds[1] = new float3(float.MinValue);
@@ -163,15 +169,17 @@ namespace GeoFoundry.OpenMapTiles
                 // A label is only tested (and only blocks others) on the tiers where it can be visible: below its
                 // style's min zoom it is faded out anyway and must not take space from visible labels.
                 float styleMinZoom = math.max(rule.MinZoom, req.MinZoom);
-                int floorTier = math.max(cand.MinTier, math.min(Tiers, (int)math.ceil(styleMinZoom - TileZoom - 1e-4f)));
+                int styleTier = math.clamp((int)math.ceil(styleMinZoom - TileZoom - 1e-4f), FirstTier, LastTier);
+                int floorTier = math.max(cand.MinTier, styleTier);
                 int minTier = floorTier;
                 if (!overlap)
                 {
-                    for (int t = 0; t <= Tiers; t++)
-                        fits[t] = t >= floorTier && Fits(ref Occupancy, t, cand.TilePx, box) && Fits(ref own, t, cand.TilePx, box);
-                    minTier = -1;
-                    for (int t = Tiers; t >= floorTier && fits[t]; t--) minTier = t;
-                    if (minTier < 0) continue;
+                    for (int t = FirstTier; t <= LastTier; t++)
+                        fits[t - FirstTier] = t >= floorTier && Fits(ref Occupancy, t, cand.TilePx, box) &&
+                                              Fits(ref own, t, cand.TilePx, box);
+                    minTier = int.MinValue;
+                    for (int t = LastTier; t >= floorTier && fits[t - FirstTier]; t--) minTier = t;
+                    if (minTier == int.MinValue) continue;
                 }
 
                 float minZoom = math.max(styleMinZoom, TileZoom + minTier);
@@ -179,7 +187,7 @@ namespace GeoFoundry.OpenMapTiles
                 if (minZoom >= maxZoom) continue;
 
                 if (!overlap)
-                    for (int t = minTier; t <= Tiers; t++)
+                    for (int t = minTier; t <= LastTier; t++)
                     {
                         if (Occupy) Insert(ref Occupancy, t, cand.TilePx, box);
                         else Insert(ref own, t, cand.TilePx, box);
@@ -372,7 +380,7 @@ namespace GeoFoundry.OpenMapTiles
                             TilePx = uv * TilePixels,
                             Anchor = pos + new float3(0f, Lift, 0f),
                             Angle = 0f,
-                            MinTier = 0,
+                            MinTier = FirstTier,
                             Order = candidates.Length,
                         });
                     }
@@ -412,14 +420,14 @@ namespace GeoFoundry.OpenMapTiles
                 if (iconOnly)
                 {
                     for (float s = spacing * 0.5f; s < total; s += spacing)
-                        AddLineCandidate(r, s, 0f, 0, false, ref candidates, linePx, lineLen);
+                        AddLineCandidate(r, s, 0f, FirstTier, false, ref candidates, linePx, lineLen);
                     continue;
                 }
 
                 // The shortest tier at which the label fits the line at all.
-                int floorTier = 0;
-                while (floorTier <= Tiers && total < labelLen / (1 << floorTier)) floorTier++;
-                if (floorTier > Tiers) continue;
+                int floorTier = FirstTier;
+                while (floorTier <= LastTier && total < labelLen * math.exp2(-floorTier)) floorTier++;
+                if (floorTier > LastTier) continue;
 
                 if (total < spacing)
                 {
@@ -446,9 +454,9 @@ namespace GeoFoundry.OpenMapTiles
             int tier = floorTier;
             float2 a = default, b = default;
             bool ok = false;
-            for (; tier <= Tiers; tier++)
+            for (; tier <= LastTier; tier++)
             {
-                float half = labelLen / (1 << tier) * 0.5f;
+                float half = labelLen * math.exp2(-tier) * 0.5f;
                 float center = math.clamp(s, math.min(half, total * 0.5f), math.max(total - half, total * 0.5f));
                 float s0 = math.max(0f, center - half), s1 = math.min(total, center + half);
                 a = PointAt(pts, len, s0);
@@ -543,7 +551,7 @@ namespace GeoFoundry.OpenMapTiles
 
         private static bool Fits(ref NativeParallelMultiHashMap<int, float4> grid, int tier, float2 tilePx, float4 box)
         {
-            float2 c = tilePx * (1 << tier);
+            float2 c = tilePx * math.exp2(tier);
             float4 b = new float4(c + box.xy, c + box.zw);
             int2 min = (int2)math.floor(b.xy / CellSize), max = (int2)math.floor(b.zw / CellSize);
             for (int cy = min.y; cy <= max.y; cy++)
@@ -560,7 +568,7 @@ namespace GeoFoundry.OpenMapTiles
 
         private static void Insert(ref NativeParallelMultiHashMap<int, float4> grid, int tier, float2 tilePx, float4 box)
         {
-            float2 c = tilePx * (1 << tier);
+            float2 c = tilePx * math.exp2(tier);
             float4 b = new float4(c + box.xy, c + box.zw);
             int2 min = (int2)math.floor(b.xy / CellSize), max = (int2)math.floor(b.zw / CellSize);
             for (int cy = min.y; cy <= max.y; cy++)

@@ -18,3 +18,4 @@ MonoBehaviour:
   _textMaterial: {fileID: 2100000, guid: 8742a12b3e124ecb943d99064ede4f6a, type: 2}
   _iconMaterial: {fileID: 2100000, guid: 044edb005a3b441b9475d4f1f61bcb4f, type: 2}
   _icons: {fileID: 11400000, guid: 96d61f7732f1412da89680e9ec7a68d0, type: 2}
+  _tileScreenSizePixels: 1000

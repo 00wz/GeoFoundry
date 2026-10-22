@@ -135,6 +135,13 @@ namespace GeoFoundry.OpenMapTiles
         public FixedString64Bytes RankKey;
         /// <summary>Features with a rank above this are skipped; 0 disables the filter.</summary>
         public int MaxRank;
+        /// <summary>
+        /// Ranks up to this value order the labels; higher ones do not. In the OpenMapTiles schema only small ranks are
+        /// global (Natural Earth ranks of countries, states and major cities, 1–10 in <c>place</c>); the others are
+        /// the order within the tile's label grid and differ between zooms (the same POI is rank 1 at z13 and 5 at
+        /// z14), so ordering by them would make tiles of different zooms show different winners.
+        /// </summary>
+        public int StableRankLimit;
         public OmtIconMode IconMode;
         /// <summary>Icon template tried when the rule's icon does not exist (e.g. <c>{class}</c>).</summary>
         public FixedString64Bytes FallbackIcon;
@@ -171,7 +178,8 @@ namespace GeoFoundry.OpenMapTiles
 
                 if (!ComposeText(fi, out var text)) continue;
 
-                var req = OmtLabelRequest.Create(fi, kind, ri + RuleOffset, text, (float)rank);
+                float priority = rank <= StableRankLimit ? (float)rank : StableRankLimit + 1;
+                var req = OmtLabelRequest.Create(fi, kind, ri + RuleOffset, text, priority);
                 req.Spacing = Spacing;
                 req.Flags = Flags;
                 if (!ReverseKey.IsEmpty && Props.GetNumber(fi, ReverseKey, 0) < 0) req.Flags |= OmtLabelFlags.Reverse;

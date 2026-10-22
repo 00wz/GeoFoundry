@@ -6,8 +6,8 @@ namespace GeoFoundry.OpenMapTiles
 {
     /// <summary>
     /// Handler of the OpenMapTiles <c>park</c> layer: protected areas (national parks, nature reserves, protected
-    /// areas by <c>class</c>) as a faint fill plus a casing outline, and park names at the label points (<c>name</c>,
-    /// ordered by <c>rank</c>).
+    /// areas by <c>class</c>) as a faint fill plus a casing outline, and park names at the label points (<c>name</c>;
+    /// <c>rank</c>, local to each zoom's label grid in the schema, only filters).
     /// </summary>
     [CreateAssetMenu(menuName = "GeoFoundry/Layers/OpenMapTiles/Park", fileName = "OmtPark")]
     public sealed class OmtParkHandler : OmtLayerHandler

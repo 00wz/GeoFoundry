@@ -87,13 +87,15 @@ namespace GeoFoundry.OpenMapTiles
                 if (primary.Length > 0)
                 {
                     a = await AsyncGeometryWorker.BuildLineMeshAsync(
-                        ctx.Layer, primary.AsArray(), ctx.TileCoord, ctx.Grids.Center, ctx.LocalFrame, ctx.Ct);
+                        ctx.Layer, primary.AsArray(), ctx.TileCoord, ctx.Grids.Center, ctx.LocalFrame,
+                        OmtZoom.MetersPerPixel(ctx.TileCoord.Z), ctx.Ct);
                     if (a != null) a.name = $"{name}_{ctx.TileCoord}";
                 }
                 if (secondary.Length > 0 && !ctx.Ct.IsCancellationRequested)
                 {
                     b = await AsyncGeometryWorker.BuildLineMeshAsync(
-                        ctx.Layer, secondary.AsArray(), ctx.TileCoord, ctx.Grids.Center, ctx.LocalFrame, ctx.Ct);
+                        ctx.Layer, secondary.AsArray(), ctx.TileCoord, ctx.Grids.Center, ctx.LocalFrame,
+                        OmtZoom.MetersPerPixel(ctx.TileCoord.Z), ctx.Ct);
                     if (b != null) b.name = $"{name}Secondary_{ctx.TileCoord}";
                 }
                 return (a, b);
@@ -116,7 +118,6 @@ namespace GeoFoundry.OpenMapTiles
             var disposables = new List<System.IDisposable>();
             try
             {
-                float mpp = OmtZoom.MetersPerPixel(ctx.TileCoord.Z);
                 float scale = OmtZoom.MercatorScale(ctx.TileCoord);
                 Unity.Jobs.JobHandle handle = default;
                 foreach (var pass in passes)
@@ -136,7 +137,6 @@ namespace GeoFoundry.OpenMapTiles
                         SubclassKey = OmtRules.Fixed(pass.SubclassKey),
                         Zoom = ctx.TileCoord.Z,
                         MercatorScale = scale,
-                        MetersPerPixel = mpp,
                         IncludeLines = pass.Lines,
                         OutlinePolygons = pass.Outlines,
                         Primary = primary,

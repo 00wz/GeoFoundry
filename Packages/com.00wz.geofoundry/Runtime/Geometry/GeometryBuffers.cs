@@ -19,9 +19,9 @@ namespace GeoFoundry.Geometry
         public NativeList<float3> Normals;
         public NativeList<float2> Uvs;
         public NativeList<Color32> Colors;
-        /// <summary>Optional second UV channel (TexCoord1); empty unless the job writes it (see
-        /// <see cref="RoadBuildJob.Uv1"/>).</summary>
-        public NativeList<float2> Uv1;
+        /// <summary>Optional per-vertex line attributes; empty unless the job writes them (see
+        /// <see cref="RoadBuildJob.LineVertices"/>).</summary>
+        public NativeList<LineVertex> LineVertices;
         public NativeList<int> Triangles;
         public NativeList<MeshRange> Ranges;
         public NativeList<int> RangeFeatureIndices;
@@ -39,7 +39,7 @@ namespace GeoFoundry.Geometry
                 Normals = new NativeList<float3>(vertexCapacity, Allocator.Persistent),
                 Uvs = new NativeList<float2>(vertexCapacity, Allocator.Persistent),
                 Colors = new NativeList<Color32>(vertexCapacity, Allocator.Persistent),
-                Uv1 = new NativeList<float2>(0, Allocator.Persistent),
+                LineVertices = new NativeList<LineVertex>(0, Allocator.Persistent),
                 Triangles = new NativeList<int>(indexCapacity, Allocator.Persistent),
                 Ranges = new NativeList<MeshRange>(rangeCapacity, Allocator.Persistent),
                 RangeFeatureIndices = new NativeList<int>(rangeCapacity, Allocator.Persistent),
@@ -59,7 +59,7 @@ namespace GeoFoundry.Geometry
             Normals.Dispose();
             Uvs.Dispose();
             Colors.Dispose();
-            Uv1.Dispose();
+            LineVertices.Dispose();
             Triangles.Dispose();
             Ranges.Dispose();
             RangeFeatureIndices.Dispose();

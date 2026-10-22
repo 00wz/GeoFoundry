@@ -92,14 +92,19 @@ namespace GeoFoundry.Geometry
 
         /// <summary>
         /// Builds the features listed in <paramref name="items"/> as ribbons of a single <see cref="Mesh"/>, in list
-        /// order (see <see cref="LineDrawItem"/>): per-item width, vertex color, dash pattern (TexCoord1) and
+        /// order (see <see cref="LineDrawItem"/>): per-item width, vertex color, dash pattern, minimum zoom and
         /// optional Polygon outlines. The general-purpose line builder for schema handlers: casings, fills, dashed
         /// rails and boundaries, outlines. <paramref name="items"/> is borrowed. Returns <c>null</c> on cancellation
         /// or if nothing was emitted.
         /// </summary>
+        /// <remarks>
+        /// The ribbons are built and draped onto the ground at their width at <paramref name="metersPerPixel"/>
+        /// (normally the screen pixel size of the tile's zoom); the <c>GeoFoundry/Line Lit</c> shader resizes them at
+        /// the camera's pixel size (see <see cref="LineWidth"/>), so the mesh bounds are padded by a tenth of the tile.
+        /// </remarks>
         public static async Awaitable<Mesh> BuildLineMeshAsync(
             NativeMvtLayer layer, NativeArray<LineDrawItem> items, TileCoord coord, GroundGrid grid,
-            MercatorPivot localFrame, CancellationToken ct)
+            MercatorPivot localFrame, float metersPerPixel, CancellationToken ct)
         {
             JobInputs.RequireGrid(grid, nameof(grid));
             if (!items.IsCreated || items.Length == 0) return null;
@@ -107,8 +112,10 @@ namespace GeoFoundry.Geometry
             var job = CreateRoadJob(layer, null, coord, grid, localFrame, default, buffers);
             job.DrawItems = items;
             job.UseDrawItems = true;
+            job.BaseMetersPerPixel = metersPerPixel;
             job.EmitGlobalIndices = true;
-            return await RunSingleMeshAsync(job.Schedule(), buffers, $"Lines_{coord}", ct);
+            return await RunSingleMeshAsync(job.Schedule(), buffers, $"Lines_{coord}", ct,
+                boundsPadding: 0.1f * (float)coord.SizeMeters());
         }
 
         // ---- Roads -------------------------------------------------------------
@@ -346,7 +353,7 @@ namespace GeoFoundry.Geometry
                 Normals = buffers.Normals,
                 Uvs = buffers.Uvs,
                 Colors = buffers.Colors,
-                Uv1 = buffers.Uv1,
+                LineVertices = buffers.LineVertices,
                 Triangles = buffers.Triangles,
                 Ranges = buffers.Ranges,
                 RangeFeatureIndices = buffers.RangeFeatureIndices,
@@ -419,14 +426,16 @@ namespace GeoFoundry.Geometry
             }
         }
 
-        private static async Awaitable<Mesh> RunSingleMeshAsync(JobHandle handle, GeometryBuffers buffers, string name, CancellationToken ct)
+        private static async Awaitable<Mesh> RunSingleMeshAsync(JobHandle handle, GeometryBuffers buffers, string name,
+            CancellationToken ct, float boundsPadding = 0f)
         {
             if (!await CompleteOrDisposeAsync(handle, buffers, ct)) return null;
 
             try
             {
                 return await MeshAssembler.BuildSingleMeshAsync(
-                    buffers.Positions, buffers.Normals, buffers.Uvs, buffers.Colors, buffers.Triangles, name, ct, buffers.Uv1);
+                    buffers.Positions, buffers.Normals, buffers.Uvs, buffers.Colors, buffers.Triangles, name, ct,
+                    buffers.LineVertices, boundsPadding);
             }
             finally
             {

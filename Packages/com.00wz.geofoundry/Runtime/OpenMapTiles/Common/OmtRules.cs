@@ -64,7 +64,7 @@ namespace GeoFoundry.OpenMapTiles
         [Tooltip("Real width of the line in ground meters.")]
         [Min(0)] public float WidthMeters = 4f;
 
-        [Tooltip("Minimum width in style pixels at the tile's zoom, so the line stays visible on low-zoom tiles.")]
+        [Tooltip("Minimum width in screen pixels at the camera's zoom, so the line stays visible from afar.")]
         [Min(0)] public float MinWidthPixels = 1f;
 
         [Tooltip("Dash pattern in multiples of the line width (dash, gap); zero means a solid line.")]
@@ -73,7 +73,7 @@ namespace GeoFoundry.OpenMapTiles
         [Tooltip("Casing (outline) color drawn below all fills; alpha 0 disables the casing.")]
         public Color CasingColor = new Color(0, 0, 0, 0);
 
-        [Tooltip("Casing width added on each side, in style pixels at the tile's zoom.")]
+        [Tooltip("Minimum casing width added on each side, in screen pixels at the camera's zoom.")]
         [Min(0)] public float CasingPixels = 0.75f;
 
         [Tooltip("Minimum casing width added on each side, in ground meters.")]
@@ -88,7 +88,7 @@ namespace GeoFoundry.OpenMapTiles
         [Tooltip("Overlay dash pattern in multiples of the line width (dash, gap); zero means solid.")]
         public Vector2 OverlayDash;
 
-        [Tooltip("Minimum tile zoom at which the line is drawn.")]
+        [Tooltip("Minimum zoom at which the line is drawn: tiles of lower zoom skip it, and it fades in as the camera zoom reaches it.")]
         [Range(0, 22)] public int MinZoom;
 
         [Tooltip("Draw order inside the layer: lower values are drawn first.")]

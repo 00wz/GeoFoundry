@@ -67,8 +67,21 @@ namespace GeoFoundry.Tests.EditMode.OpenMapTiles
         {
             Assert.That(OmtZoom.MetersPerPixel(0), Is.EqualTo(78271.517f).Within(0.01f));
             Assert.That(OmtZoom.MetersPerPixel(14), Is.EqualTo(4.7773f).Within(1e-3f));
-            Assert.That(OmtZoom.LineWidth(10f, 2f, 1.5f, 4f), Is.EqualTo(15f));
-            Assert.That(OmtZoom.LineWidth(10f, 5f, 1.5f, 4f), Is.EqualTo(20f));
+            var width = OmtZoom.LineWidth(10f, 2f, 1.5f);
+            Assert.That(width, Is.EqualTo(new GeoFoundry.Geometry.LineWidth(15f, 2f)), "real meters scaled to Mercator");
+            Assert.That(width.Evaluate(4f), Is.EqualTo(15f), "the real width up close");
+            Assert.That(width.Evaluate(10f), Is.EqualTo(20f), "at least 2 px from afar");
+        }
+
+        [TestCase(133f, -4, -1)]
+        [TestCase(1024f, -1, 1)]
+        [TestCase(1500f, -1, 2)]
+        [TestCase(2048f, 0, 2)]
+        public void OmtZoom_LabelTierRange_CoversTheShownSizesWithMargin(float size, int first, int last)
+        {
+            var tiers = OmtZoom.LabelTierRange(size);
+            Assert.That(tiers.x, Is.EqualTo(first));
+            Assert.That(tiers.y, Is.EqualTo(last));
         }
 
         [TestCase("12", 12.0)]
@@ -162,6 +175,46 @@ namespace GeoFoundry.Tests.EditMode.OpenMapTiles
             Assert.That(OmtStyleDefaults.LandcoverFills().Count, Is.GreaterThan(30));
             Assert.That(OmtLabelDefaults.Poi().Count, Is.GreaterThan(40));
             Assert.That(OmtLabelDefaults.Place().Any(r => r.Class == "city" && r.Subclass == "2"), Is.True);
+        }
+
+        /// <summary>
+        /// Tile zoom from which the OpenMapTiles schema (reference SQL, <c>layers/*/*.sql</c>) puts a class into the
+        /// tiles, per label rule list; a class not listed has data at the rule's minimum zoom or earlier.
+        /// </summary>
+        private static readonly (string List, Func<List<OmtLabelRule>> Rules, Func<OmtLabelRule, float> SchemaZoom)[]
+            SchemaZooms =
+            {
+                ("place", OmtLabelDefaults.Place, r => r.Class switch
+                {
+                    "town" => 7, "village" => 8, "hamlet" or "borough" or "suburb" => 11,
+                    "quarter" or "neighbourhood" or "isolated_dwelling" => 14, "island" => 8, _ => 0,
+                }),
+                ("poi", OmtLabelDefaults.Poi, r => r.Class is "railway" or "ferry_terminal" or "college" or "university"
+                    ? 12 : 14),
+                ("aerodrome_label", OmtLabelDefaults.AerodromeLabel, r => r.Class == "international" ? 8 : 10),
+                ("water_name", OmtLabelDefaults.WaterName, r => r.Class == "bay" ? 13 : 0),
+                ("water_name lines", OmtLabelDefaults.WaterNameLines, r => 3),
+                ("waterway", OmtLabelDefaults.Waterway, r => r.Class switch
+                {
+                    "river" => 3, "canal" => 12, _ => 13,
+                }),
+                ("transportation_name", OmtLabelDefaults.TransportationNames, r => r.Class switch
+                {
+                    "minor" or "tertiary" or "ferry" => 12, "path" or "service" or "track" => 13, _ => 0,
+                }),
+                ("mountain_peak", OmtLabelDefaults.MountainPeak, r => r.Class is "ridge" or "arete" or "cliff" ? 13 : 7),
+                ("housenumber", OmtLabelDefaults.Housenumber, r => 14),
+            };
+
+        [Test]
+        public void LabelDefaults_AreNeverShownBeforeTheSchemaPutsTheirDataIntoTiles()
+        {
+            foreach (var (list, rules, schemaZoom) in SchemaZooms)
+            foreach (var rule in rules())
+            {
+                Assert.That(rule.MinZoom, Is.GreaterThanOrEqualTo(schemaZoom(rule)),
+                    $"{list} rule '{rule.Class}/{rule.Subclass}' fades in before its data exists");
+            }
         }
     }
 }

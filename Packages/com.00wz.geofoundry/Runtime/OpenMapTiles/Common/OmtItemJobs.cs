@@ -173,7 +173,6 @@ namespace GeoFoundry.OpenMapTiles
         public FixedString64Bytes SubclassKey;
         public int Zoom;
         public float MercatorScale;
-        public float MetersPerPixel;
         public bool IncludeLines;
         public bool OutlinePolygons;
 
@@ -185,7 +184,7 @@ namespace GeoFoundry.OpenMapTiles
             public int Fi;
             public int Rule;
             public Color32 Color;
-            public float Width;
+            public LineWidth Width;
             public float2 Dash;
             public bool Casing;
             public bool Outline;
@@ -216,7 +215,7 @@ namespace GeoFoundry.OpenMapTiles
                     Fi = fi,
                     Rule = ri,
                     Color = rule.Color,
-                    Width = OmtZoom.LineWidth(rule.WidthMeters, rule.MinWidthPixels, MercatorScale, MetersPerPixel),
+                    Width = OmtZoom.LineWidth(rule.WidthMeters, rule.MinWidthPixels, MercatorScale),
                     Dash = rule.Dash,
                     Casing = rule.HasCasing,
                     Outline = outline,
@@ -232,12 +231,12 @@ namespace GeoFoundry.OpenMapTiles
                         case OmtModifierAction.Recolor: r.Color = mod.Color; break;
                         case OmtModifierAction.Tint: r.Color = OmtModifiers.Mix(r.Color, mod.Color, mod.Scale); break;
                         case OmtModifierAction.Dash: r.Dash = mod.Dash; break;
-                        case OmtModifierAction.WidthScale: r.Width *= mod.Scale; break;
+                        case OmtModifierAction.WidthScale: r.Width = r.Width.ScaleCore(mod.Scale); break;
                         case OmtModifierAction.NoCasing: r.Casing = false; break;
                         case OmtModifierAction.Secondary: toSecondary = true; break;
                     }
                 }
-                if (skip || r.Width <= 0f) continue;
+                if (skip || (r.Width.Meters <= 0f && r.Width.Pixels <= 0f)) continue;
 
                 var key = new int4(rule.Order, fi, resolved.Length, 0);
                 resolved.Add(r);
@@ -269,16 +268,18 @@ namespace GeoFoundry.OpenMapTiles
                     {
                         case 0:
                             if (!r.Casing) break;
-                            float extra = math.max(rule.CasingMeters * MercatorScale, rule.CasingPixels * MetersPerPixel);
-                            output.Add(new LineDrawItem(r.Fi, r.Width + 2f * extra, rule.CasingColor, default, flags));
+                            output.Add(new LineDrawItem(r.Fi,
+                                r.Width.WithBorder(rule.CasingMeters * MercatorScale, rule.CasingPixels),
+                                rule.CasingColor, default, flags, rule.MinZoom));
                             break;
                         case 1:
-                            output.Add(new LineDrawItem(r.Fi, r.Width, r.Color, r.Dash * r.Width, flags));
+                            output.Add(new LineDrawItem(r.Fi, r.Width, r.Color, r.Dash, flags, rule.MinZoom));
                             break;
                         case 2:
-                            if (!rule.HasOverlay) break;
-                            float w = r.Width * rule.OverlayWidth;
-                            output.Add(new LineDrawItem(r.Fi, w, rule.OverlayColor, rule.OverlayDash * r.Width, flags));
+                            if (!rule.HasOverlay || rule.OverlayWidth <= 0f) break;
+                            // The overlay dash is relative to the fill width; the item's dash to its own core.
+                            output.Add(new LineDrawItem(r.Fi, r.Width.ScaleCore(rule.OverlayWidth), rule.OverlayColor,
+                                rule.OverlayDash / rule.OverlayWidth, flags, rule.MinZoom));
                             break;
                     }
                 }

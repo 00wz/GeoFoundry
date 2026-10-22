@@ -32,7 +32,7 @@ Material:
     - _DepthPull: 60
     - _FadeRange: 0.25
     - _LabelScale: 1
-    - _ZTest: 4
+    - _Occlusion: 1
     m_Colors: []
   m_BuildTextureStacks: []
   m_AllowLocking: 1

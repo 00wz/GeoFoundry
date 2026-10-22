@@ -56,9 +56,6 @@ namespace GeoFoundry.OpenMapTiles
         /// </summary>
         protected abstract Awaitable BuildAsync(LayerLoadContext ctx, OmtTileOutput output);
 
-        /// <summary>Gets the tile's style pixel size in Mercator meters (see <see cref="OmtZoom"/>).</summary>
-        protected static float MetersPerPixel(LayerLoadContext ctx) => OmtZoom.MetersPerPixel(ctx.TileCoord.Z);
-
 #if UNITY_EDITOR
         protected virtual void OnValidate()
         {

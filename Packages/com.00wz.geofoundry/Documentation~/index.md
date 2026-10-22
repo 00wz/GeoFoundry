@@ -93,6 +93,11 @@ building geometry in your own handlers there are the `AsyncGeometryWorker` (`Geo
 ordered draw-list builders `BuildSurfaceMeshAsync(layer, SurfaceDrawItem[] …)` and `BuildLineMeshAsync`, and
 `GroundAnchors` for placing objects on the ground) and `MeshHierarchyInstance` (`GeoFoundry.Render.Layers`) helpers.
 
+Line meshes from `BuildLineMeshAsync` get their width from the `GeoFoundry/Line Lit` shader at the camera's pixel
+size (see [Line widths](#line-widths)), which `MapViewShaderGlobals` (`GeoFoundry.Render`) publishes before each
+camera renders. `GeoFoundryBootstrapper` creates it; a custom bootstrap creates it after its ground height provider,
+calls `Enable()` and disposes it on shutdown. Without it, lines render at the width they were built with.
+
 For another schema, write your own handlers on the model of the OpenMapTiles ones (see below);
 `SurfacesLayerHandler` and `DefaultTerrainHandler` do not depend on the schema and can be reused as is. Surface and
 building UVs are in meters: set the texture density with the material's Tiling.
@@ -130,7 +135,9 @@ Add the assets from `Presets/OpenMapTiles/` (the `Omt*` handlers and `Terrain`) 
 / `TerrainHandler`. `OmtTextSettings` is shared by all label-producing handlers: it holds the fonts (Noto Sans
 Regular/Bold/Italic are included), the name language preference (`name:en`, `name` by default; put e.g. `name:ru`
 first for Russian names), the label and icon materials and the icon atlas (`OmtIconAtlas`, built from the style's
-icons with `Tools~/omt-icons/build_atlas.py`).
+icons with `Tools~/omt-icons/build_atlas.py`). Keep its `Tile Screen Size Pixels` equal to
+`GeoFoundryConfig.Lod.MaxTileScreenSizePixels` (both are 1500 by default): handlers cannot query the tile selection,
+and label decluttering depends on how large tiles appear on screen (see [Widths and zooms](#widths-and-zooms)).
 
 ### Attribution
 
@@ -154,7 +161,7 @@ placeholders are replaced by the feature's values).
 ### Draw order
 
 Draped layers use the ZTest Always shaders `GeoFoundry/Surface Lit` (fills) and `GeoFoundry/Line Lit` (lines; adds
-dashes), so the material's Sorting Priority (`_QueueOffset`) decides which layer covers which. The preset materials
+widths at the camera's pixel size and dashes), so the material's Sorting Priority (`_QueueOffset`) decides which layer covers which. The preset materials
 follow `OmtDrawOrder`; a handler logs a warning in the inspector if an assigned material deviates from it:
 
 | Priority | Mesh | Priority | Mesh |
@@ -172,16 +179,55 @@ bridges). Colors come from the style tables as vertex colors, so the preset mate
 
 ### Widths and zooms
 
-Scene units are Web Mercator meters. Line widths combine a real ground width (converted to Mercator meters at the
-tile's latitude) with a minimum width in style pixels at the tile's zoom, so lines stay visible on low-zoom tiles and
-keep their physical size up close. Label sizes are screen pixels, and label zooms are display zooms (the MapLibre
-convention, where the world is `512 · 2^zoom` pixels wide). Because OpenMapTiles tiles end at zoom 14 and are viewed
-much closer, labels are decluttered per tile for several display zooms beyond the tile zoom
-(`OmtTextSettings.OverzoomLevels`): each label gets the zoom from which it does not collide with more important
-labels, and the `GeoFoundry/Label` shader fades it in from that zoom as the camera approaches.
+Scene units are Web Mercator meters. Style sizes are screen pixels, and zooms are display zooms (the MapLibre
+convention, where the world is `512 · 2^zoom` pixels wide).
+
+<a id="line-widths"></a>Line widths are evaluated by the `GeoFoundry/Line Lit` shader every frame, as in MapLibre and
+Mapbox: a real ground width (converted to Mercator meters at the tile's latitude), but at least a minimum width in
+screen pixels at the camera's pixel size (`LineWidth`), plus the casing border on each side. The pixel size is the
+one at the center of the view (`MapViewShaderGlobals`), one value for the whole scene, so a line has the same world
+width on every tile whatever its zoom, including the coarse tiles shown close up while the detailed ones load, and
+perspective thins distant lines. Up close the real widths win; from afar the minimum pixels keep lines visible. A
+line rule's `MinZoom` is compared with the tile zoom when the tile is built (lower-zoom tiles skip the line) and
+with the camera zoom when rendering (the line fades in over half a zoom). The ribbons are built and draped onto the
+ground at the tile's pixel size; the shader resizes them along the ribbon and follows the ground's tangent plane.
+
+Labels are screen-space. The tile selection shows a tile of zoom `Z` while it is between `S / 2` and `S` pixels wide
+(`S` is `Lod.MaxTileScreenSizePixels`, mirrored in `OmtTextSettings.TileScreenSizePixels`), that is at display zooms
+`Z + log2(S / 1024)` to `Z + log2(S / 512)`. Labels are decluttered per tile on display-zoom tiers covering that
+range (plus one lower tier for the far side of tiles under a tilted camera), and, because OpenMapTiles tiles end at zoom 14 and are viewed much closer, down to
+`OmtTextSettings.SourceMaxZoom + OverzoomLevels` on tiles of that zoom: each label gets the zoom from which it does
+not collide with more important labels, and the `GeoFoundry/Label` shader fades it in from that zoom as the camera
+approaches.
+
+Labels behind hills and buildings are hidden; the anchor is pulled toward the camera by the material's `Depth Pull`,
+so labels of POIs inside buildings stay visible. The label materials' `Occlusion` selects how:
+
+- `Depth Texture` (default): as MapLibre does on terrain, the shader tests the anchor alone against the camera depth
+  texture and fades the whole label when it is hidden, so the ground and buildings never cut a label. Needs **Depth
+  Texture** enabled in the URP asset (or on the camera); on WebGL it costs a depth copy per frame. Cameras without the
+  depth texture fall back to `Depth Buffer`.
+- `Depth Buffer`: the whole label gets the depth of the pulled anchor and is depth-tested per pixel, with no extra
+  cost, but under a tilted camera the ground or a building in front can cut off part of a label.
+
+Label zooms follow the OpenMapTiles schema (3.x): a rule's minimum zoom is never below the tile zoom from which the
+schema puts its class into the tiles (quarters and neighbourhoods, most POIs and house numbers only at z14, bays at
+z13, airports other than international ones from z10, …), so labels fade in with the zoom instead of popping up with
+the tile that first carries them. The schema's `rank` is the order within each zoom's label grid (the same POI may be
+rank 1 at z13 and 5 at z14), so only the global ranks (up to 10 in `place`: countries, states, major cities) order
+the labels; equal priorities are resolved by the label text, so tiles of different zooms pick the same winners.
 
 ### Limitations
 
+- `OmtTextSettings.TileScreenSizePixels` is not synchronized with the LOD settings. If it is lower than
+  `Lod.MaxTileScreenSizePixels`, tiles show fewer labels than would fit; if it is more than about twice as high,
+  labels fade in only shortly before their tile is replaced (they flicker as the camera moves).
+- Line ribbons resized by the shader follow the ground's tangent plane at each vertex, not the terrain between the
+  vertices; on sharp terrain breaks far away the widened edge can be off by about a pixel. Distant lines thinner than
+  a pixel are not widened (Mapbox's "dilute"); use MSAA or TAA against shimmering. Lines cast no shadows.
+- The schema sends different labels at different zooms by design (z14 carries far more POIs, short street names
+  and house numbers than z13), and tiles switch instantly: a label that exists on only one of two zoom levels appears
+  or disappears with its tile. There is no time-based cross-fade between tiles.
 - Labels are decluttered within a tile, across all its label layers (in the order the layers come in the tile;
   house numbers yield to the other layers); collisions across tile borders are not resolved. Duplicates from the
   tile buffer are removed (only points inside the tile extent are labeled). A label takes space only from the zoom

@@ -127,7 +127,6 @@ namespace GeoFoundry.OpenMapTiles
                     Rules = rules,
                     Zoom = ctx.TileCoord.Z,
                     MercatorScale = OmtZoom.MercatorScale(ctx.TileCoord),
-                    MetersPerPixel = OmtZoom.MetersPerPixel(ctx.TileCoord.Z),
                     Tunnels = _tunnels,
                     BridgeCasing = OmtColor.ToVertex(_bridgeCasing),
                     White = OmtColor.ToVertex(Color.white),
@@ -147,7 +146,8 @@ namespace GeoFoundry.OpenMapTiles
                 if (!await job.Schedule().WaitNonBlockingAsync(ctx.Ct) || items.Length == 0) return null;
 
                 var mesh = await AsyncGeometryWorker.BuildLineMeshAsync(
-                    ctx.Layer, items.AsArray(), ctx.TileCoord, ctx.Grids.Center, ctx.LocalFrame, ctx.Ct);
+                    ctx.Layer, items.AsArray(), ctx.TileCoord, ctx.Grids.Center, ctx.LocalFrame,
+                    OmtZoom.MetersPerPixel(ctx.TileCoord.Z), ctx.Ct);
                 if (mesh != null) mesh.name = $"Transportation_{ctx.TileCoord}";
                 return mesh;
             }
@@ -179,7 +179,6 @@ namespace GeoFoundry.OpenMapTiles
         [ReadOnly] public NativeArray<OmtLineRuleData> Rules;
         public int Zoom;
         public float MercatorScale;
-        public float MetersPerPixel;
         public OmtTunnelMode Tunnels;
         public Color32 BridgeCasing, White, Black, Dirt, Background, Violet;
         public float RampWidth, MinorServiceWidth, UnpavedTint, RestrictedFade, TollTint;
@@ -194,7 +193,7 @@ namespace GeoFoundry.OpenMapTiles
             public int Order;
             public int Fi;
             public int Rule;
-            public float Width;
+            public LineWidth Width;
             public Color32 Color;
             public bool Casing;
             public Color32 CasingColor;
@@ -251,7 +250,7 @@ namespace GeoFoundry.OpenMapTiles
                     Order = rule.Order,
                     Fi = fi,
                     Rule = ri,
-                    Width = OmtZoom.LineWidth(rule.WidthMeters, rule.MinWidthPixels, MercatorScale, MetersPerPixel),
+                    Width = OmtZoom.LineWidth(rule.WidthMeters, rule.MinWidthPixels, MercatorScale),
                     Color = rule.Color,
                     Casing = rule.HasCasing,
                     CasingColor = rule.CasingColor,
@@ -276,10 +275,10 @@ namespace GeoFoundry.OpenMapTiles
                     e.Casing = true;
                 }
 
-                if (Props.GetNumber(fi, kRamp, 0) == 1) e.Width *= RampWidth;
+                if (Props.GetNumber(fi, kRamp, 0) == 1) e.Width = e.Width.ScaleCore(RampWidth);
                 if (hasClass && cls.Equals(vService) &&
                     (Props.Is(fi, kService, vAisle) || Props.Is(fi, kService, vDriveway) || Props.Is(fi, kService, vDriveThrough)))
-                    e.Width *= MinorServiceWidth;
+                    e.Width = e.Width.ScaleCore(MinorServiceWidth);
                 if (UnpavedTint > 0f && Props.Is(fi, kSurface, vUnpaved)) e.Color = OmtModifiers.Mix(e.Color, Dirt, UnpavedTint);
                 if (TollTint > 0f && Props.IsTrue(fi, kToll)) e.Color = OmtModifiers.Mix(e.Color, Violet, TollTint);
                 if (RestrictedFade > 0f && Props.Is(fi, kAccess, vNo)) e.Color = OmtModifiers.Mix(e.Color, Background, RestrictedFade);
@@ -309,23 +308,24 @@ namespace GeoFoundry.OpenMapTiles
                 var e = entries[i];
                 if (!e.Casing) continue;
                 var rule = Rules[e.Rule];
-                float extra = math.max(math.max(rule.CasingMeters, e.Group == 2 ? 1f : 0f) * MercatorScale,
-                    math.max(rule.CasingPixels, e.Group == 2 ? 1f : 0f) * MetersPerPixel);
-                float w = e.Width + 2f * extra;
-                Output.Add(new LineDrawItem(e.Fi, w, e.CasingColor, e.CasingDash * w));
+                float bridge = e.Group == 2 ? 1f : 0f;
+                var w = e.Width.WithBorder(math.max(rule.CasingMeters, bridge) * MercatorScale,
+                    math.max(rule.CasingPixels, bridge));
+                Output.Add(new LineDrawItem(e.Fi, w, e.CasingColor, e.CasingDash, LineDrawFlags.None, rule.MinZoom));
             }
             for (int i = start; i < end; i++)
             {
                 var e = entries[i];
                 var rule = Rules[e.Rule];
-                Output.Add(new LineDrawItem(e.Fi, e.Width, e.Color, rule.Dash * e.Width));
+                Output.Add(new LineDrawItem(e.Fi, e.Width, e.Color, rule.Dash, LineDrawFlags.None, rule.MinZoom));
             }
             for (int i = start; i < end; i++)
             {
                 var e = entries[i];
                 var rule = Rules[e.Rule];
-                if (!rule.HasOverlay) continue;
-                Output.Add(new LineDrawItem(e.Fi, e.Width * rule.OverlayWidth, rule.OverlayColor, rule.OverlayDash * e.Width));
+                if (!rule.HasOverlay || rule.OverlayWidth <= 0f) continue;
+                Output.Add(new LineDrawItem(e.Fi, e.Width.ScaleCore(rule.OverlayWidth), rule.OverlayColor,
+                    rule.OverlayDash / rule.OverlayWidth, LineDrawFlags.None, rule.MinZoom));
             }
         }
     }

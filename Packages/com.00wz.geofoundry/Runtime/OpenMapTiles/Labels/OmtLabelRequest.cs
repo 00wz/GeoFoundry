@@ -51,8 +51,14 @@ namespace GeoFoundry.OpenMapTiles
         public FixedString128Bytes Text;
         /// <summary>Index into the icon info array, or -1.</summary>
         public int Icon;
-        /// <summary>Placement priority: lower values are placed first (rank, class importance).</summary>
+        /// <summary>Placement priority within the rule: lower values are placed first (stable ranks, see
+        /// <see cref="OmtLabelRequestJob.StableRankLimit"/>).</summary>
         public float Priority;
+        /// <summary>
+        /// Tie-break after <see cref="Priority"/>: a hash of <see cref="Text"/>, the same on every zoom, unlike the
+        /// order of the features in the tile. So tiles of different zooms resolve equal-priority collisions alike.
+        /// </summary>
+        public uint Key;
         /// <summary>Display zoom range; combined with the rule's range.</summary>
         public float MinZoom;
         public float MaxZoom;
@@ -70,6 +76,7 @@ namespace GeoFoundry.OpenMapTiles
                 Text = text,
                 Icon = -1,
                 Priority = priority,
+                Key = (uint)text.GetHashCode(),
                 MinZoom = 0f,
                 MaxZoom = 24f,
                 Spacing = 250f,

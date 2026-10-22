@@ -45,6 +45,16 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
                 .Polygon(Block, ("class", "farmland"), ("subclass", "farmland")),
             expectMeshes: 2);
 
+        [Test]
+        public void TextSettings_DeclutterLabelsForTheTileScreenSize()
+        {
+            var settings = AssetDatabase.LoadAssetAtPath<OmtTextSettings>(Presets + "OmtTextSettings.asset");
+            Assert.That(settings, Is.Not.Null);
+            Assert.That(settings.TileScreenSizePixels, Is.GreaterThanOrEqualTo(1f));
+            var tiers = OmtZoom.LabelTierRange(settings.TileScreenSizePixels);
+            Assert.That(tiers.x, Is.LessThanOrEqualTo(tiers.y));
+        }
+
         [UnityTest]
         public IEnumerator Building_Extrudes() => RunHandler("OmtBuilding",
             new OmtTestTile("building").Polygon(Block, ("render_height", 20.0), ("colour", "#aabbcc")),

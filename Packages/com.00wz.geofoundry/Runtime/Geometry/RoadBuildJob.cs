@@ -29,8 +29,11 @@ namespace GeoFoundry.Geometry
     ///
     /// Draw-list mode (<see cref="UseDrawItems"/>): instead of all LineString features with <see cref="Widths"/>, the
     /// job emits the items of <see cref="DrawItems"/> in order (a feature may appear several times, e.g. casing then
-    /// fill), optionally outlining Polygon features, and writes each item's dash pattern to <see cref="Uv1"/>. End
-    /// stitching then only joins line ends of items with the same width, so a casing never stitches to a fill.
+    /// fill), optionally outlining Polygon features. Each ribbon is built at its width at
+    /// <see cref="BaseMetersPerPixel"/>, and every vertex gets its <see cref="LineVertex"/> (extrusion from the line
+    /// axis plus the item's width, dash and minimum zoom), from which the line shader resizes the ribbon at the
+    /// camera's pixel size. End stitching then only joins line ends of items with the same width, so a casing never
+    /// stitches to a fill.
     /// </summary>
     [BurstCompile]
     internal struct RoadBuildJob : IJob
@@ -57,6 +60,12 @@ namespace GeoFoundry.Geometry
         /// <summary>Whether <see cref="DrawItems"/> drives the output instead of the feature arrays.</summary>
         public bool UseDrawItems;
 
+        /// <summary>
+        /// Screen pixel size in meters at which draw-list ribbons are built (<see cref="LineWidth.Evaluate"/>), normally
+        /// that of the tile's zoom.
+        /// </summary>
+        public float BaseMetersPerPixel;
+
         public TileCoord Coord;
         public uint Extent;
 
@@ -73,8 +82,8 @@ namespace GeoFoundry.Geometry
         public NativeList<float2> Uvs;
         /// <summary>Per-vertex output parallel to <see cref="Positions"/>; see <see cref="FeatureColors"/>.</summary>
         public NativeList<Color32> Colors;
-        /// <summary>Per-vertex dash pattern (<see cref="LineDrawItem.Dash"/>), written only in draw-list mode.</summary>
-        public NativeList<float2> Uv1;
+        /// <summary>Per-vertex line attributes parallel to <see cref="Positions"/>, written only in draw-list mode.</summary>
+        public NativeList<LineVertex> LineVertices;
         public NativeList<int> Triangles;
         public NativeList<MeshRange> Ranges;
         /// <summary>Source feature index (into the Feature* arrays) of each output MeshRange. The handler uses it
@@ -90,6 +99,8 @@ namespace GeoFoundry.Geometry
         private struct ControlPoint
         {
             public float2 P0, P1, P2, P3, P4;
+            /// <summary>The line vertex the points are offset from.</summary>
+            public float2 Center;
             public bool HasJoin;
             /// <summary><c>P0 == P2</c>: the shared (inner) side of the bend is the left one, the join is on the
             /// right.</summary>
@@ -125,9 +136,17 @@ namespace GeoFoundry.Geometry
                 int itemCount = UseDrawItems ? DrawItems.Length : FeatureGeomTypes.Length;
                 for (int item = 0; item < itemCount; item++)
                 {
-                    if (!TryGetItem(item, hasColors, out int fi, out float width, out Color32 color, out float2 dash, out bool outline))
+                    if (!TryGetItem(item, hasColors, out int fi, out float width, out Color32 color, out bool outline))
                         continue;
                     int stitchKey = StitchKey(width);
+                    LineVertex template = default;
+                    if (UseDrawItems)
+                    {
+                        LineDrawItem di = DrawItems[item];
+                        LineWidth w = di.Width;
+                        template.Uv1 = new float4(w.Meters, w.Pixels, w.ExtraMeters, w.ExtraPixels);
+                        template.Uv2 = new float4(di.Dash, 0.5f * width, di.MinZoom);
+                    }
 
                     NativeMvtLineHelpers.ProjectLines(
                         FeatureRingRange[fi], Rings, RingPoints, Coord, Extent,
@@ -179,7 +198,7 @@ namespace GeoFoundry.Geometry
                         }
 
                         BuildControlPoints(points, isClosed, width, hasAdjStart, adjStart, hasAdjEnd, adjEnd, ref controlPoints);
-                        BuildRibbon(controlPoints, isClosed, tileSize, idxBase, color, dash);
+                        BuildRibbon(controlPoints, isClosed, tileSize, idxBase, color, template);
                     }
 
                     int featureVertCount = Positions.Length - featureVertStart;
@@ -206,15 +225,14 @@ namespace GeoFoundry.Geometry
         /// Resolves one entry of the iteration (a feature in feature mode, a <see cref="LineDrawItem"/> in draw-list
         /// mode). Returns <c>false</c> if it emits nothing: out-of-range index, unsupported geometry or width ≤ 0.
         /// </summary>
-        private bool TryGetItem(int item, bool hasColors, out int fi, out float width, out Color32 color, out float2 dash, out bool outline)
+        private bool TryGetItem(int item, bool hasColors, out int fi, out float width, out Color32 color, out bool outline)
         {
             if (UseDrawItems)
             {
                 LineDrawItem di = DrawItems[item];
                 fi = di.FeatureIndex;
-                width = di.WidthMeters;
+                width = di.Width.Evaluate(BaseMetersPerPixel);
                 color = di.Color;
-                dash = di.Dash;
                 outline = (di.Flags & LineDrawFlags.PolygonOutline) != 0;
             }
             else
@@ -222,7 +240,6 @@ namespace GeoFoundry.Geometry
                 fi = item;
                 width = Widths[fi];
                 color = hasColors ? FeatureColors[fi] : new Color32(255, 255, 255, 255);
-                dash = default;
                 outline = false;
             }
 
@@ -246,7 +263,7 @@ namespace GeoFoundry.Geometry
             int itemCount = UseDrawItems ? DrawItems.Length : FeatureGeomTypes.Length;
             for (int item = 0; item < itemCount; item++)
             {
-                if (!TryGetItem(item, hasColors, out int fi, out float width, out _, out _, out bool outline) || outline) continue;
+                if (!TryGetItem(item, hasColors, out int fi, out float width, out _, out bool outline) || outline) continue;
                 int key = StitchKey(width);
 
                 int2 ringRange = FeatureRingRange[fi];
@@ -374,6 +391,7 @@ namespace GeoFoundry.Geometry
                     P2 = inverse ? mirroredA : pointLeft,
                     P3 = inverse ? pointRight : mirroredA,
                     P4 = inverse ? pointLeft : pointRight,
+                    Center = current,
                     HasJoin = hasPrev && hasNext,
                     SharedLeft = !inverse,
                 });
@@ -384,7 +402,8 @@ namespace GeoFoundry.Geometry
         /// Emits ribbon triangles from the control points: for each segment, the join half at its start, the segment
         /// quad and the join half at its end.
         /// </summary>
-        private void BuildRibbon(NativeList<ControlPoint> cps, bool isClosed, float2 tileSize, int idxBase, Color32 color, float2 dash)
+        private void BuildRibbon(NativeList<ControlPoint> cps, bool isClosed, float2 tileSize, int idxBase, Color32 color,
+            LineVertex template)
         {
             int segmentCount = cps.Length - (isClosed ? 0 : 1);
             float uvProgress = 0f;
@@ -400,9 +419,9 @@ namespace GeoFoundry.Geometry
                     float start = uvProgress;
                     float end = start + math.distance(current.P4, current.SharedLeft ? current.P1 : current.P0);
                     float c4x = current.SharedLeft ? 1f : 0f;
-                    EmitTriangle(current.P0, current.P1, current.P4,
+                    EmitTriangle(current.P0, current.P1, current.P4, current.Center, current.Center, current.Center,
                         new float2(0f, end), new float2(1f, end), new float2(c4x, start),
-                        tileSize, idxBase, color, dash);
+                        tileSize, idxBase, color, template);
                     uvProgress = end;
                 }
 
@@ -411,8 +430,11 @@ namespace GeoFoundry.Geometry
                     float2 a = current.P0, b = current.P1, c = next.P2, d = next.P3;
                     float start = uvProgress;
                     float end = start + math.distance(a, c);
-                    EmitTriangle(a, b, c, new float2(0f, start), new float2(1f, start), new float2(0f, end), tileSize, idxBase, color, dash);
-                    EmitTriangle(b, d, c, new float2(1f, start), new float2(1f, end), new float2(0f, end), tileSize, idxBase, color, dash);
+                    float2 ca = current.Center, cc = next.Center;
+                    EmitTriangle(a, b, c, ca, ca, cc, new float2(0f, start), new float2(1f, start), new float2(0f, end),
+                        tileSize, idxBase, color, template);
+                    EmitTriangle(b, d, c, ca, cc, cc, new float2(1f, start), new float2(1f, end), new float2(0f, end),
+                        tileSize, idxBase, color, template);
                     uvProgress = end;
                 }
 
@@ -422,9 +444,9 @@ namespace GeoFoundry.Geometry
                     float start = uvProgress;
                     float end = start + math.distance(next.P4, next.SharedLeft ? next.P1 : next.P0);
                     float c4x = next.SharedLeft ? 1f : 0f;
-                    EmitTriangle(next.P2, next.P3, next.P4,
+                    EmitTriangle(next.P2, next.P3, next.P4, next.Center, next.Center, next.Center,
                         new float2(0f, start), new float2(1f, start), new float2(c4x, end),
-                        tileSize, idxBase, color, dash);
+                        tileSize, idxBase, color, template);
                     uvProgress = end;
                 }
             }
@@ -432,12 +454,17 @@ namespace GeoFoundry.Geometry
 
         /// <summary>
         /// Projects a ribbon triangle (tile-local meters) onto the ground and writes its sub-triangles to the output
-        /// buffers, interpolating the ribbon UV to each sub-vertex.
+        /// buffers, interpolating the ribbon UV to each sub-vertex. In draw-list mode the extrusions of the corners
+        /// (offsets from their line vertices <paramref name="ca"/>..<paramref name="cc"/>) are interpolated too: the
+        /// interpolated center stays on the line axis, so the shader can resize the ribbon around it.
         /// </summary>
         private void EmitTriangle(
-            float2 a, float2 b, float2 c, float2 uvA, float2 uvB, float2 uvC,
-            float2 tileSize, int idxBase, Color32 color, float2 dash)
+            float2 a, float2 b, float2 c, float2 ca, float2 cb, float2 cc, float2 uvA, float2 uvB, float2 uvC,
+            float2 tileSize, int idxBase, Color32 color, LineVertex template)
         {
+            float invHalf = UseDrawItems && template.Uv2.z > 0f ? 1f / template.Uv2.z : 0f;
+            float2 eA = (a - ca) * invHalf, eB = (b - cb) * invHalf, eC = (c - cc) * invHalf;
+
             int before = Positions.Length;
             NativeGroundProjector.ProjectTriangle(a / tileSize, b / tileSize, c / tileSize, Grid, LocalFrame, ref Positions, ref Normals, ref Uvs);
             int after = Positions.Length;
@@ -449,7 +476,12 @@ namespace GeoFoundry.Geometry
                 float3 w = NativeTriangleMath.Barycentric(Uvs[vi] * tileSize, a, b, c);
                 Uvs[vi] = uvA * w.x + uvB * w.y + uvC * w.z;
                 Colors.Add(color);
-                if (UseDrawItems) Uv1.Add(dash);
+                if (UseDrawItems)
+                {
+                    LineVertex v = template;
+                    v.Uv0 = new float4(Uvs[vi], eA * w.x + eB * w.y + eC * w.z);
+                    LineVertices.Add(v);
+                }
                 Triangles.Add(vi - idxBase);
             }
         }

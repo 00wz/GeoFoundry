@@ -6,6 +6,7 @@
         "GeoFoundry.TileIO",
         "GeoFoundry.Tiles",
         "GeoFoundry.Ground",
+        "GeoFoundry.Render",
         "Unity.Burst",
         "Unity.Collections",
         "Unity.Mathematics"

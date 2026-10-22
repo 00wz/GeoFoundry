@@ -20,6 +20,20 @@ namespace GeoFoundry.OpenMapTiles
         public static float MetersPerPixel(double zoom) => (float)(WorldSizeMeters / (TilePixels * math.pow(2.0, zoom)));
 
         /// <summary>
+        /// Returns the label declutter tiers (see <see cref="OmtLabelLayoutJob"/>) covering the tile shown between
+        /// <c>tileScreenSizePixels / 2</c> and <c>tileScreenSizePixels</c> pixels wide: tier <c>t</c> is the tile
+        /// <c>512 · 2^t</c> pixels wide. The first tier has one tier of margin, because under a tilted camera the far
+        /// side of a tile appears smaller than the tile selection estimates from its closest point.
+        /// </summary>
+        public static int2 LabelTierRange(float tileScreenSizePixels)
+        {
+            float s = math.max(1f, tileScreenSizePixels);
+            int first = (int)math.floor(math.log2(s / (2f * (float)TilePixels)) + 1e-4f) - 1;
+            int last = (int)math.ceil(math.log2(s / (float)TilePixels) - 1e-4f);
+            return new int2(first, math.max(first, last));
+        }
+
+        /// <summary>
         /// Returns the factor converting real (ground) meters to Mercator meters at the tile's latitude:
         /// <c>1 / cos(latitude)</c>. Real-world sizes (road widths) are multiplied by it so that they match the
         /// Mercator-scaled footprints around them.
@@ -32,11 +46,12 @@ namespace GeoFoundry.OpenMapTiles
         }
 
         /// <summary>
-        /// Returns a line width in Mercator meters: the real width (converted with <paramref name="mercatorScale"/>),
-        /// but at least <paramref name="minPixels"/> style pixels at the tile's zoom, so that lines stay visible on
-        /// low-zoom tiles and keep their physical size up close.
+        /// Returns a line width: the real width (converted to Mercator meters with <paramref name="mercatorScale"/>),
+        /// but at least <paramref name="minPixels"/> screen pixels at the camera's pixel size (evaluated by the line
+        /// shader, see <see cref="GeoFoundry.Geometry.LineWidth"/>), so that lines stay visible from afar and keep their
+        /// physical size up close.
         /// </summary>
-        public static float LineWidth(float realMeters, float minPixels, float mercatorScale, float metersPerPixel) =>
-            math.max(realMeters * mercatorScale, minPixels * metersPerPixel);
+        public static Geometry.LineWidth LineWidth(float realMeters, float minPixels, float mercatorScale) =>
+            new Geometry.LineWidth(realMeters * mercatorScale, minPixels);
     }
 }

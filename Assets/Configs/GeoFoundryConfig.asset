@@ -15,7 +15,7 @@ MonoBehaviour:
   VectorTilesEndpointTemplate: http://192.168.253.55:3000/moscow/{z}/{x}/{y}
   DemTilesEndpointTemplate: http://192.168.253.55:8000/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=/dem/dem.tif&algorithm=terrarium
   Lod:
-    MaxTileScreenSizePixels: 133.3
+    MaxTileScreenSizePixels: 1000
     MaxZoom: 14
     MaxSkippedLevels: 0
     CullBoundsHeightMargin: 1000
@@ -38,6 +38,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 2ab912744d0a49518b786f33b07cc259, type: 2}
   - {fileID: 11400000, guid: d6331a04ae09425183e6dadad9af43db, type: 2}
   - {fileID: 11400000, guid: b6a6202ca8d94ab59da8e0dac7dd6cc4, type: 2}
+  LoadNeighborGrids: 1
   MaxConcurrentHttpRequests: 16
   MaxConcurrentLoads: 16
   GpuBudgetMB: 512
@@ -47,5 +48,4 @@ MonoBehaviour:
   OriginCameraDistance: 12000
   TerrainGridResolution: 32
   EnableRelief: 1
-  LoadNeighborGrids: 1
   FloatingOriginThresholdMeters: 6000
