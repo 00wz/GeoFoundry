@@ -110,7 +110,7 @@ The cartography and visual design of OpenMapTiles are licensed under the
 [Creative Commons Attribution 4.0 International License (CC-BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
 Changes made in GeoFoundry: colors, line widths, dash patterns, label sizes, fonts and minimum zooms were transcribed
 into C# tables and adapted to 3D rendering (pixel widths turned into minimum on-screen widths combined with real
-ground widths, semi-transparent fills flattened over the background, fill patterns dropped, defaults added for
+ground widths, fill patterns dropped, defaults added for
 classes the style does not draw); the SVG icons were rasterized at 2x, packed into one atlas, and the fill and line
 pattern icons were left out. The schema code of OpenMapTiles (BSD 3-Clause) is not included.
 

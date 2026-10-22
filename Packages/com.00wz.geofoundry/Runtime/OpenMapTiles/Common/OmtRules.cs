@@ -20,7 +20,7 @@ namespace GeoFoundry.OpenMapTiles
         [Tooltip("Value of the subclass attribute; empty matches any subclass.")]
         public string Subclass = "";
 
-        [Tooltip("Fill color (sRGB). Alpha is ignored: draped layers are opaque.")]
+        [Tooltip("Fill color (sRGB); alpha is the fill opacity (the layers below show through).")]
         public Color Color = Color.white;
 
         [Tooltip("Minimum tile zoom at which the polygons are drawn.")]
@@ -58,7 +58,7 @@ namespace GeoFoundry.OpenMapTiles
         [Tooltip("Value of the subclass attribute; empty matches any.")]
         public string Subclass = "";
 
-        [Tooltip("Fill color (sRGB).")]
+        [Tooltip("Fill color (sRGB); alpha is the line opacity.")]
         public Color Color = Color.white;
 
         [Tooltip("Real width of the line in ground meters.")]

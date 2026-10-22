@@ -166,16 +166,21 @@ follow `OmtDrawOrder`; a handler logs a warning in the inspector if an assigned 
 
 | Priority | Mesh | Priority | Mesh |
 |---|---|---|---|
-| −50 | terrain | −32 | transportation areas |
-| −46 / −45 | landcover fill / outline | −30 | transportation lines |
-| −44 / −43 | landuse fill / outline | −28 | waterway bridges |
-| −42 | park fill | −27 | mountain lines |
-| −40 | water | −26 | boundary |
-| −38 | waterway | −24 | park outline |
-| −36 / −35 | aeroway fill / lines | 0 | buildings |
+| −50 | terrain | −35 | aeroway lines |
+| −48 | landuse fill | −32 | transportation areas |
+| −47 | aeroway fill | −30 | transportation lines |
+| −46 / −45 | landcover fill / outline | −28 | waterway bridges |
+| −43 | landuse outline | −27 | mountain lines |
+| −42 | park fill | −26 | boundary |
+| −40 | water | −24 | park outline |
+| −38 | waterway | 0 | buildings |
 
-Inside one mesh the order of the features is the draw order (casings below fills, tunnels below ground roads below
-bridges). Colors come from the style tables as vertex colors, so the preset materials have a white base color.
+As in the style, land use and aeroway areas lie below the land cover, so a park or grass inside a residential area
+stays visible. Inside one mesh the order of the features is the draw order (casings below fills, tunnels below ground
+roads below bridges). Colors come from the style tables as vertex colors, so the preset materials have a white base
+color. The alpha of a color is the style's fill or line opacity: the ForwardLit passes of both draped shaders blend
+by the vertex alpha (staying in the opaque queue, where the Sorting Priority orders them), so semi-transparent fills
+such as the park tint or intermittent water show the layers below.
 
 ### Widths and zooms
 
@@ -234,8 +239,10 @@ the labels; equal priorities are resolved by the label text, so tiles of differe
   at which it becomes visible.
 - Text is laid out without complex shaping (Arabic joining, Indic scripts) or right-to-left reordering; scripts
   covered by the fonts (Latin, Cyrillic, Greek with Noto Sans) render correctly.
-- Fill patterns of the style (forest leaves, wetland reeds, military hatching) are not reproduced; semi-transparent
-  style fills are flattened over the background color.
+- Fill patterns of the style (forest leaves, wetland reeds, military hatching) are not reproduced. Zoom-dependent
+  opacities (the medium-scale land cover fading in between zoom 7 and 10) are drawn at full opacity.
+- Semi-transparent fills and lines blend only in forward rendering; the deferred GBuffer pass draws them opaque.
+  Overlapping features of one semi-transparent mesh blend twice where they overlap (as in MapLibre fills).
 - Country names on either side of a border (`boundary.adm0_l`/`adm0_r`) and the `route_2..6_*` concurrencies of
   `transportation_name` are not drawn.
 

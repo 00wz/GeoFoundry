@@ -29,7 +29,8 @@ Initial release.
   texture as in MapLibre, never cut by the ground or buildings; a per-pixel depth-buffer mode without the depth
   texture).
 - `GeoFoundry/Line Lit` shader (Surface Lit with dashes and line widths evaluated per frame at the camera's pixel
-  size, as in MapLibre: `LineWidth`, `MapViewShaderGlobals`) and ordered draw-list geometry:
+  size, as in MapLibre: `LineWidth`, `MapViewShaderGlobals`; Surface Lit and Line Lit blend by the vertex alpha for
+  semi-transparent style colors) and ordered draw-list geometry:
   `AsyncGeometryWorker.BuildLineMeshAsync`, a draw-item overload of `BuildSurfaceMeshAsync`, `GroundAnchors`.
 - Floating origin based on a double-precision Mercator pivot.
 - `MapCameraRig` camera: orbit and free modes, desktop and touch input. Requires the Input System package;

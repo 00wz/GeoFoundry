@@ -11,7 +11,7 @@ namespace GeoFoundry.OpenMapTiles
     [CreateAssetMenu(menuName = "GeoFoundry/Layers/OpenMapTiles/Aeroway", fileName = "OmtAeroway")]
     public sealed class OmtAerowayHandler : OmtLayerHandler
     {
-        [Tooltip("Fill material (GeoFoundry/Surface Lit). Recommended Sorting Priority: -36.")]
+        [Tooltip("Fill material (GeoFoundry/Surface Lit). Recommended Sorting Priority: -47.")]
         [SerializeField] private Material _fillMaterial;
 
         [Tooltip("Line material (GeoFoundry/Line Lit). Recommended Sorting Priority: -35.")]

@@ -8,6 +8,9 @@
 //     GeoFoundryLitGBufferPass.hlsl (shared with GeoFoundryBuildingLit.shader) instead of the stock
 //     LitForwardPass.hlsl/LitGBufferPass.hlsl. The forks add per-vertex color (albedo *= vertexColor),
 //     needed by the build jobs (AsyncGeometryWorker) that write per-feature colors into the mesh.
+//  4) The "ForwardLit" pass blends by the vertex alpha (Blend SrcAlpha OneMinusSrcAlpha, GEOFOUNDRY_VERTEX_ALPHA)
+//     without leaving the opaque queue, so semi-transparent style fills show the layers below them. The deferred
+//     GBuffer pass cannot blend and renders them opaque.
 //
 // Usage: terrain / water / park / landuse / landcover / road materials.
 // IMPORTANT: for opaque materials, URP LitShader.ValidateMaterial forces renderQueue to 2000
@@ -126,7 +129,9 @@ Shader "GeoFoundry/Surface Lit"
 
             // -------------------------------------
             // Render State Commands
-            Blend[_SrcBlend][_DstBlend], [_SrcBlendAlpha][_DstBlendAlpha]
+            // GeoFoundry: blends by the vertex alpha (style opacity) while staying in the opaque queue, where the
+            // render queue orders the draped layers; opaque vertices (alpha 1) overwrite as before.
+            Blend SrcAlpha OneMinusSrcAlpha, One OneMinusSrcAlpha
             ZWrite[_ZWrite]
             ZTest Always              // GeoFoundry: surfaces draw in renderQueue order, without z-fighting
             Cull[_Cull]
@@ -199,6 +204,7 @@ Shader "GeoFoundry/Surface Lit"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
 
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
+            #define GEOFOUNDRY_VERTEX_ALPHA
             #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLitForwardPass.hlsl"
             ENDHLSL
         }

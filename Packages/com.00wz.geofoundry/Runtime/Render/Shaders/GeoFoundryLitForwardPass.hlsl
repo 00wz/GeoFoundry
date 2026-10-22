@@ -14,6 +14,10 @@
 // camera's pixel size (GeoFoundryWidenLine, GeoFoundryLineWidth.hlsl), Varyings.dash (TEXCOORD12) carries the
 // distance along the line and the dash pattern in meters, and the fragment is discarded in the gaps.
 //
+// Optional blending by the vertex alpha (search for "GEOFOUNDRY VERTEX ALPHA"), compiled only with
+// #define GEOFOUNDRY_VERTEX_ALPHA (Surface Lit, Line Lit, whose ForwardLit pass blends with SrcAlpha OneMinusSrcAlpha):
+// the output alpha is the surface alpha even for the Opaque surface type, which would otherwise force it to 1.
+//
 // Everything else matches the original. Like the original ("keep this file in sync with LitGBufferPass.hlsl"),
 // keep this file in sync with the matching fork GeoFoundryLitGBufferPass.hlsl.
 #ifndef GEOFOUNDRY_LIT_FORWARD_PASS_INCLUDED
@@ -331,7 +335,11 @@ void LitPassFragment(
 
     half4 color = UniversalFragmentPBR(inputData, surfaceData);
     color.rgb = MixFog(color.rgb, inputData.fogCoord);
+#ifdef GEOFOUNDRY_VERTEX_ALPHA
+    color.a = saturate(color.a); // GEOFOUNDRY VERTEX ALPHA: the pass blends by it even in the opaque queue
+#else
     color.a = OutputAlpha(color.a, IsSurfaceTypeTransparent(_Surface));
+#endif
 
     outColor = color;
 

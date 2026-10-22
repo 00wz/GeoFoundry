@@ -12,7 +12,7 @@ namespace GeoFoundry.OpenMapTiles
     [CreateAssetMenu(menuName = "GeoFoundry/Layers/OpenMapTiles/Landuse", fileName = "OmtLanduse")]
     public sealed class OmtLanduseHandler : OmtLayerHandler
     {
-        [Tooltip("Fill material (GeoFoundry/Surface Lit). Recommended Sorting Priority: -44.")]
+        [Tooltip("Fill material (GeoFoundry/Surface Lit). Recommended Sorting Priority: -48.")]
         [SerializeField] private Material _fillMaterial;
 
         [Tooltip("Outline material (GeoFoundry/Line Lit); leave empty to skip outlines. Recommended Sorting Priority: -43.")]

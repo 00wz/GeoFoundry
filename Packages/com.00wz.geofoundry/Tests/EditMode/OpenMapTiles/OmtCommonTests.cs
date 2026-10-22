@@ -59,6 +59,23 @@ namespace GeoFoundry.Tests.EditMode.OpenMapTiles
         }
 
         [Test]
+        public void StyleDefaults_KeepTheStyleOpacityAsAlpha()
+        {
+            Assert.That(OmtStyleDefaults.ParkFills()[0].Color.a, Is.EqualTo(0.15f).Within(1e-4f), "the park tint is see-through");
+            Assert.That(OmtStyleDefaults.WaterIntermittent.a, Is.EqualTo(0.85f).Within(1e-4f));
+            Assert.That(OmtStyleDefaults.LandcoverFills()[0].Color.a, Is.EqualTo(1f), "opaque style fills stay opaque");
+            Assert.That(OmtColor.ToVertex(new Color(1f, 0f, 0f, 0.15f)).a, Is.EqualTo(38), "alpha reaches the vertex color");
+        }
+
+        [Test]
+        public void DrawOrder_PutsLanduseAndAerowayBelowLandcover_AsTheStyle()
+        {
+            Assert.That(OmtDrawOrder.Landuse, Is.LessThan(OmtDrawOrder.Landcover));
+            Assert.That(OmtDrawOrder.AerowayFill, Is.LessThan(OmtDrawOrder.Landcover));
+            Assert.That(OmtDrawOrder.Terrain, Is.LessThan(OmtDrawOrder.Landuse));
+        }
+
+        [Test]
         public void OmtColor_RejectsUnknownFunctions() =>
             Assert.Throws<FormatException>(() => OmtColor.Parse("cmyk(0,0,0,0)"));
 

@@ -1,7 +1,7 @@
 // GeoFoundry — Line Lit
 // ============================================================================
 // GeoFoundry/Surface Lit (see GeoFoundrySurfaceLit.shader for the base changes against URP Lit: ZTest Always,
-// render-queue ordering through _QueueOffset, per-vertex color) plus line support: the ForwardLit and GBuffer passes
+// render-queue ordering through _QueueOffset, per-vertex color, blending by the vertex alpha) plus line support: the ForwardLit and GBuffer passes
 // compile the forked passes with #define GEOFOUNDRY_LINE, and DepthOnly/DepthNormals use GeoFoundryLineDepthPass.hlsl.
 // Every pass resizes the ribbons at the camera's pixel size (_GeoFoundryMetersPerPixel, see GeoFoundryLineWidth.hlsl)
 // and discards fragments in the gaps of the dash pattern. The line attributes reuse the lightmap UV channels, so the
@@ -117,7 +117,9 @@ Shader "GeoFoundry/Line Lit"
 
             // -------------------------------------
             // Render State Commands
-            Blend[_SrcBlend][_DstBlend], [_SrcBlendAlpha][_DstBlendAlpha]
+            // GeoFoundry: blends by the vertex alpha (style opacity) while staying in the opaque queue, where the
+            // render queue orders the draped layers; opaque vertices (alpha 1) overwrite as before.
+            Blend SrcAlpha OneMinusSrcAlpha, One OneMinusSrcAlpha
             ZWrite[_ZWrite]
             ZTest Always              // GeoFoundry: surfaces draw in renderQueue order, without z-fighting
             Cull[_Cull]
@@ -185,6 +187,7 @@ Shader "GeoFoundry/Line Lit"
 
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #define GEOFOUNDRY_LINE
+            #define GEOFOUNDRY_VERTEX_ALPHA
             #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLitForwardPass.hlsl"
             ENDHLSL
         }

@@ -7,21 +7,22 @@ namespace GeoFoundry.OpenMapTiles
     /// Default style tables of the OpenMapTiles handlers, transcribed from the official "OSM OpenMapTiles" style
     /// (<c>layers/*/style.json</c> of the openmaptiles repository, CC-BY 4.0). Colors are copied verbatim; pixel widths
     /// are the style's widths around zoom 10–12 used as on-screen minimums, real widths are typical ground sizes.
-    /// Semi-transparent style fills are flattened over <see cref="Background"/>, since draped layers are opaque.
+    /// Semi-transparent style colors keep their alpha (the style's fill/line opacity): the draped shaders blend by it.
     /// Fill patterns of the style (forest leaves, wetland reeds, military hatching) are not reproduced.
     /// </summary>
     public static class OmtStyleDefaults
     {
-        /// <summary>The style's background color, used for the terrain material and color flattening.</summary>
+        /// <summary>The style's background color, used for the terrain material and fades toward the background.</summary>
         public static Color Background => C("hsl(40, 26%, 93%)");
 
         private static Color C(string css) => OmtColor.Parse(css);
 
-        private static Color Flat(string css, float opacity)
+        /// <summary>A style color with the style's opacity as alpha.</summary>
+        private static Color A(string css, float opacity)
         {
             var c = C(css);
-            c.a = opacity;
-            return OmtColor.Over(c, Background);
+            c.a *= opacity;
+            return c;
         }
 
         // ---- water ------------------------------------------------------------
@@ -32,7 +33,7 @@ namespace GeoFoundry.OpenMapTiles
         };
 
         /// <summary>Color of intermittent water polygons (<c>intermittent=1</c>).</summary>
-        public static Color WaterIntermittent => Flat("hsl(205, 91%, 83%)", 0.85f);
+        public static Color WaterIntermittent => A("hsl(205, 91%, 83%)", 0.85f);
 
         // ---- landcover --------------------------------------------------------
 
@@ -146,7 +147,7 @@ namespace GeoFoundry.OpenMapTiles
             return new List<OmtLineRule>
             {
                 new OmtLineRule("railway", "", C("hsl(309, 14%, 74%)"), 0f, 0.7f, 60, 13),
-                new OmtLineRule("military", "", Flat("hsl(0, 100%, 67%)", 0.24f), 0f, 2f, 60, 13),
+                new OmtLineRule("military", "", A("hsl(0, 100%, 67%)", 0.24f), 0f, 2f, 60, 13),
                 new OmtLineRule("residential", "", C("hsl(0, 0%, 73%)"), 0f, 0.5f, 60, 13),
                 new OmtLineRule("industrial", "", C("hsl(309, 14%, 74%)"), 0f, 0.5f, 60, 13),
                 new OmtLineRule("retail", "", C("hsl(6, 47%, 72%)"), 0f, 0.5f, 60, 13),
@@ -159,8 +160,8 @@ namespace GeoFoundry.OpenMapTiles
                 new OmtLineRule("pitch", "", C("hsl(156, 22%, 57%)"), 0f, 0.5f, 60, 13),
                 new OmtLineRule("playground", "", C("hsl(126, 26%, 32%)"), 0f, 0.3f, 60, 13),
                 new OmtLineRule("track", "", C("hsl(155, 22%, 57%)"), 0f, 0.5f, 60, 13),
-                new OmtLineRule("theme_park", "", Flat("hsl(330, 100%, 20%)", 0.3f), 0f, 3f, 61, 13),
-                new OmtLineRule("zoo", "", Flat("hsl(330, 100%, 20%)", 0.3f), 0f, 3f, 61, 13),
+                new OmtLineRule("theme_park", "", A("hsl(330, 100%, 20%)", 0.3f), 0f, 3f, 61, 13),
+                new OmtLineRule("zoo", "", A("hsl(330, 100%, 20%)", 0.3f), 0f, 3f, 61, 13),
                 new OmtLineRule("dam", "", C("hsl(0, 0%, 27%)"), 0f, 2f, 60, 13),
             };
         }
@@ -173,13 +174,13 @@ namespace GeoFoundry.OpenMapTiles
         /// </summary>
         public static List<OmtFillRule> ParkFills() => new List<OmtFillRule>
         {
-            new OmtFillRule("", "", Flat("hsl(103, 36%, 66%)", 0.15f), 55, 8),
+            new OmtFillRule("", "", A("hsl(103, 36%, 66%)", 0.15f), 55, 8),
         };
 
         public static List<OmtLineRule> ParkOutlines() => new List<OmtLineRule>
         {
             new OmtLineRule("", "", C("hsl(107, 34%, 45%)"), 0f, 1f, 56, 8)
-                .WithCasing(Flat("hsl(103, 36%, 66%)", 0.8f), 1.2f, 0f),
+                .WithCasing(A("hsl(103, 36%, 66%)", 0.8f), 1.2f, 0f),
         };
 
         // ---- aeroway ----------------------------------------------------------
@@ -256,7 +257,7 @@ namespace GeoFoundry.OpenMapTiles
         public static List<OmtLineRule> TransportationLines()
         {
             Color white = Color.white;
-            Color pathCasing = Flat("hsl(0, 0%, 93%)", 0.6f);
+            Color pathCasing = A("hsl(0, 0%, 93%)", 0.6f);
             var rules = new List<OmtLineRule>
             {
                 // Roads: fill + casing; order = draw order of the fills (minor roads below major ones).
@@ -279,7 +280,7 @@ namespace GeoFoundry.OpenMapTiles
                 new OmtLineRule("bus_guideway", "", C("hsl(214, 30%, 60%)"), 3f, 0.6f, 131, 13),
                 new OmtLineRule("raceway", "", C("hsl(351, 97%, 87%)"), 8f, 1f, 133, 9),
                 new OmtLineRule("track", "", C("hsl(42, 61%, 41%)"), 3f, 1f, 131, 12)
-                    .WithDash(3, 2.5f).WithCasing(Flat("hsl(0, 0%, 100%)", 0.5f), 0.5f, 0.5f),
+                    .WithDash(3, 2.5f).WithCasing(A("hsl(0, 0%, 100%)", 0.5f), 0.5f, 0.5f),
 
                 // Paths by subclass (bicycle/horse=designated are mapped to cycleway/bridleway by the handler).
                 new OmtLineRule("path", "pedestrian", C("hsl(240, 19%, 89%)"), 6f, 1f, 116, 12)

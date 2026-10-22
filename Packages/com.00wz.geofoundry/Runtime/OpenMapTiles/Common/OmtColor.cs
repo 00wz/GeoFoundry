@@ -78,16 +78,5 @@ namespace GeoFoundry.OpenMapTiles
             if (QualitySettings.activeColorSpace == ColorSpace.Linear) color = color.linear;
             return color;
         }
-
-        /// <summary>
-        /// Flattens a semi-transparent style color over the map background into an opaque color: draped layers are
-        /// opaque, so the style's fill opacity is approximated by mixing with the background.
-        /// </summary>
-        public static Color Over(Color color, Color background)
-        {
-            var c = Color.Lerp(background, color, color.a);
-            c.a = 1f;
-            return c;
-        }
     }
 }
