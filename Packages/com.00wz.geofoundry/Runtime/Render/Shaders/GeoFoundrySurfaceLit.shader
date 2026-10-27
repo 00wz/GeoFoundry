@@ -9,8 +9,11 @@
 //     LitForwardPass.hlsl/LitGBufferPass.hlsl. The forks add per-vertex color (albedo *= vertexColor),
 //     needed by the build jobs (AsyncGeometryWorker) that write per-feature colors into the mesh.
 //  4) The "ForwardLit" pass blends by the vertex alpha (Blend SrcAlpha OneMinusSrcAlpha, GEOFOUNDRY_VERTEX_ALPHA)
-//     without leaving the opaque queue, so semi-transparent style fills show the layers below them. The deferred
-//     GBuffer pass cannot blend and renders them opaque.
+//     without leaving the opaque queue, so semi-transparent style fills show the layers below them. With the
+//     material's "Deferred Blend" (_GEOFOUNDRY_GBUFFER_BLEND) the "GBuffer" pass blends too, like URP's GBuffer
+//     decals: color channels by the vertex alpha, while smoothness, occlusion and material flags (GBuffer alpha
+//     channels) stay those of the surface below. Leave it off for a base layer such as the terrain, which must write
+//     the whole GBuffer.
 //
 // Usage: terrain / water / park / landuse / landcover / road materials.
 // IMPORTANT: for opaque materials, URP LitShader.ValidateMaterial forces renderQueue to 2000
@@ -87,6 +90,13 @@ Shader "GeoFoundry/Surface Lit"
         [ToggleUI] _ReceiveShadows("Receive Shadows", Float) = 1.0
         // Editmode props
         _QueueOffset("Queue offset", Float) = 0.0
+
+        // GeoFoundry: deferred blending by the vertex alpha (GeoFoundrySurfaceLitShaderGUI keeps the state in sync).
+        [Toggle(_GEOFOUNDRY_GBUFFER_BLEND)] _DeferredBlend("Deferred Blend", Float) = 0.0
+        [HideInInspector] _GBufferSrcBlend("__gbsrc", Float) = 1.0
+        [HideInInspector] _GBufferDstBlend("__gbdst", Float) = 0.0
+        [HideInInspector] _GBufferSrcBlendAlpha("__gbsrcA", Float) = 1.0
+        [HideInInspector] _GBufferDstBlendAlpha("__gbdstA", Float) = 0.0
 
         // ObsoleteProperties
         [HideInInspector] _MainTex("BaseMap", 2D) = "white" {}
@@ -271,6 +281,12 @@ Shader "GeoFoundry/Surface Lit"
 
             // -------------------------------------
             // Render State Commands
+            // GeoFoundry: blends GBuffer0..3 by the vertex alpha (coverage) like URP's GBuffer decals; the alpha
+            // channels (material flags, occlusion, smoothness) keep the value below (alpha factors Zero One).
+            Blend 0 [_GBufferSrcBlend] [_GBufferDstBlend], [_GBufferSrcBlendAlpha] [_GBufferDstBlendAlpha]
+            Blend 1 [_GBufferSrcBlend] [_GBufferDstBlend], [_GBufferSrcBlendAlpha] [_GBufferDstBlendAlpha]
+            Blend 2 [_GBufferSrcBlend] [_GBufferDstBlend], [_GBufferSrcBlendAlpha] [_GBufferDstBlendAlpha]
+            Blend 3 [_GBufferSrcBlend] [_GBufferDstBlend], [_GBufferSrcBlendAlpha] [_GBufferDstBlendAlpha]
             ZWrite[_ZWrite]
             ZTest Always              // GeoFoundry: surfaces draw in renderQueue order
             Cull[_Cull]
@@ -286,6 +302,7 @@ Shader "GeoFoundry/Surface Lit"
             // Shader Stages
             #pragma vertex LitGBufferPassVertex
             #pragma fragment LitGBufferPassFragment
+            #pragma shader_feature_local_fragment _GEOFOUNDRY_GBUFFER_BLEND
 
             // -------------------------------------
             // Material Keywords
@@ -560,5 +577,5 @@ Shader "GeoFoundry/Surface Lit"
     }
 
     FallBack "Hidden/Universal Render Pipeline/FallbackError"
-    CustomEditor "UnityEditor.Rendering.Universal.ShaderGUI.LitShader"
+    CustomEditor "GeoFoundry.Editor.GeoFoundrySurfaceLitShaderGUI"
 }

@@ -2,7 +2,8 @@
 // with the same per-vertex color addition as GeoFoundryLitForwardPass.hlsl. The deferred path is not used
 // on WebGL, but it is forked alongside ForwardLit so forward and deferred behave the same on other platforms.
 // See GeoFoundryLitForwardPass.hlsl for the list of changes (search for "GEOFOUNDRY VERTEX COLOR" and
-// "GEOFOUNDRY LINE").
+// "GEOFOUNDRY LINE"). With _GEOFOUNDRY_GBUFFER_BLEND (search for "GEOFOUNDRY GBUFFER BLEND") semi-transparent
+// surfaces blend into the GBuffer like URP's GBuffer decals.
 #ifndef GEOFOUNDRY_LIT_GBUFFER_PASS_INCLUDED
 #define GEOFOUNDRY_LIT_GBUFFER_PASS_INCLUDED
 
@@ -287,7 +288,19 @@ GBufferFragOutput LitGBufferPassFragment(Varyings input)
                                               inputData.bakedGI, surfaceData.occlusion, inputData.positionWS,
                                               inputData.normalWS, inputData.viewDirectionWS, inputData.normalizedScreenSpaceUV);
 
-    return PackGBuffersBRDFData(brdfData, inputData, surfaceData.smoothness, surfaceData.emission + color, surfaceData.occlusion);
+    GBufferFragOutput output = PackGBuffersBRDFData(brdfData, inputData, surfaceData.smoothness,
+        surfaceData.emission + color, surfaceData.occlusion);
+#ifdef _GEOFOUNDRY_GBUFFER_BLEND
+    // GEOFOUNDRY GBUFFER BLEND: like URP's GBuffer decals, the pass blends GBuffer0..3 by their alpha, and its alpha
+    // blend factors (Zero One) keep the alpha channels below, so the alpha carries the coverage (vertex alpha)
+    // instead of the material flags, occlusion and smoothness, which stay those of the surface below.
+    half coverage = saturate(surfaceData.alpha);
+    output.gBuffer0.a = coverage;
+    output.gBuffer1.a = coverage;
+    output.gBuffer2.a = coverage;
+    output.color.a = coverage;
+#endif
+    return output;
 }
 
 #endif

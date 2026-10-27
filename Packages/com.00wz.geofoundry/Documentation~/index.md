@@ -178,9 +178,12 @@ follow `OmtDrawOrder`; a handler logs a warning in the inspector if an assigned 
 As in the style, land use and aeroway areas lie below the land cover, so a park or grass inside a residential area
 stays visible. Inside one mesh the order of the features is the draw order (casings below fills, tunnels below ground
 roads below bridges). Colors come from the style tables as vertex colors, so the preset materials have a white base
-color. The alpha of a color is the style's fill or line opacity: the ForwardLit passes of both draped shaders blend
-by the vertex alpha (staying in the opaque queue, where the Sorting Priority orders them), so semi-transparent fills
-such as the park tint or intermittent water show the layers below.
+color. The alpha of a color is the style's fill or line opacity: both draped shaders blend by the vertex alpha
+(staying in the opaque queue, where the Sorting Priority orders them), so semi-transparent fills such as the park
+tint or intermittent water show the layers below. In the deferred path they blend into the GBuffer like URP's GBuffer
+decals: always for `GeoFoundry/Line Lit`, and for `GeoFoundry/Surface Lit` when the material's **Deferred Blend** is
+on (all layer presets; off for `DefaultTerrain`, the base layer that must write the whole GBuffer). Shaders of the
+layers below need no convention: any opaque URP shader (Lit, Shader Graph) works as a base.
 
 ### Widths and zooms
 
@@ -241,8 +244,11 @@ the labels; equal priorities are resolved by the label text, so tiles of differe
   covered by the fonts (Latin, Cyrillic, Greek with Noto Sans) render correctly.
 - Fill patterns of the style (forest leaves, wetland reeds, military hatching) are not reproduced. Zoom-dependent
   opacities (the medium-scale land cover fading in between zoom 7 and 10) are drawn at full opacity.
-- Semi-transparent fills and lines blend only in forward rendering; the deferred GBuffer pass draws them opaque.
-  Overlapping features of one semi-transparent mesh blend twice where they overlap (as in MapLibre fills).
+- In the deferred path a semi-transparent pixel keeps the smoothness, occlusion and material flags of the surface
+  below (they are stored in the GBuffer alpha channels, which carry the coverage), as with URP's GBuffer decals; the
+  presets use the same values on all draped materials. A custom semi-transparent draped shader must blend the same
+  way to work in deferred (Shader Graph cannot; its transparent materials render forward-only).
+- Overlapping features of one semi-transparent mesh blend twice where they overlap (as in MapLibre fills).
 - Country names on either side of a border (`boundary.adm0_l`/`adm0_r`) and the `route_2..6_*` concurrencies of
   `transportation_name` are not drawn.
 

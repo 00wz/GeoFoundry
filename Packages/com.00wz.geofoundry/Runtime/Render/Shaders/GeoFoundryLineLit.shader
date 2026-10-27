@@ -1,7 +1,8 @@
 // GeoFoundry — Line Lit
 // ============================================================================
 // GeoFoundry/Surface Lit (see GeoFoundrySurfaceLit.shader for the base changes against URP Lit: ZTest Always,
-// render-queue ordering through _QueueOffset, per-vertex color, blending by the vertex alpha) plus line support: the ForwardLit and GBuffer passes
+// render-queue ordering through _QueueOffset, per-vertex color, blending by the vertex alpha in the forward and,
+// like GBuffer decals, the deferred path) plus line support: the ForwardLit and GBuffer passes
 // compile the forked passes with #define GEOFOUNDRY_LINE, and DepthOnly/DepthNormals use GeoFoundryLineDepthPass.hlsl.
 // Every pass resizes the ribbons at the camera's pixel size (_GeoFoundryMetersPerPixel, see GeoFoundryLineWidth.hlsl)
 // and discards fragments in the gaps of the dash pattern. The line attributes reuse the lightmap UV channels, so the
@@ -254,6 +255,12 @@ Shader "GeoFoundry/Line Lit"
 
             // -------------------------------------
             // Render State Commands
+            // GeoFoundry: blends GBuffer0..3 by the vertex alpha (coverage) like URP's GBuffer decals; the alpha
+            // channels (material flags, occlusion, smoothness) keep the value below (alpha factors Zero One).
+            Blend 0 SrcAlpha OneMinusSrcAlpha, Zero One
+            Blend 1 SrcAlpha OneMinusSrcAlpha, Zero One
+            Blend 2 SrcAlpha OneMinusSrcAlpha, Zero One
+            Blend 3 SrcAlpha OneMinusSrcAlpha, Zero One
             ZWrite[_ZWrite]
             ZTest Always              // GeoFoundry: surfaces draw in renderQueue order
             Cull[_Cull]
@@ -321,6 +328,7 @@ Shader "GeoFoundry/Line Lit"
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #define GEOFOUNDRY_LINE
+            #define _GEOFOUNDRY_GBUFFER_BLEND
             #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLitGBufferPass.hlsl"
             ENDHLSL
         }

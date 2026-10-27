@@ -30,7 +30,8 @@ Initial release.
   texture).
 - `GeoFoundry/Line Lit` shader (Surface Lit with dashes and line widths evaluated per frame at the camera's pixel
   size, as in MapLibre: `LineWidth`, `MapViewShaderGlobals`; Surface Lit and Line Lit blend by the vertex alpha for
-  semi-transparent style colors) and ordered draw-list geometry:
+  semi-transparent style colors, in deferred like GBuffer decals, Surface Lit per material through "Deferred Blend")
+  and ordered draw-list geometry:
   `AsyncGeometryWorker.BuildLineMeshAsync`, a draw-item overload of `BuildSurfaceMeshAsync`, `GroundAnchors`.
 - Floating origin based on a double-precision Mercator pivot.
 - `MapCameraRig` camera: orbit and free modes, desktop and touch input. Requires the Input System package;
