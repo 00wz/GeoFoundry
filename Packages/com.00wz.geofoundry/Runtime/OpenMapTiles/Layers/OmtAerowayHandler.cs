@@ -14,7 +14,7 @@ namespace GeoFoundry.OpenMapTiles
         [Tooltip("Fill material (GeoFoundry/Surface Lit). Recommended Sorting Priority: -47.")]
         [SerializeField] private Material _fillMaterial;
 
-        [Tooltip("Line material (GeoFoundry/Line Lit). Recommended Sorting Priority: -35.")]
+        [Tooltip("Line material (GeoFoundry/Line Lit). Recommended Sorting Priority: -38.")]
         [SerializeField] private Material _lineMaterial;
 
         [SerializeField] private List<OmtFillRule> _fills = OmtStyleDefaults.AerowayFills();

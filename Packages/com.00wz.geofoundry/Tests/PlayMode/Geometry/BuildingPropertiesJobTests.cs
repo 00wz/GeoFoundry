@@ -32,7 +32,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             try
             {
                 Assert.That(props.Value.Hidden[0], Is.False);
-                Assert.That(props.Value.TopMeters[0], Is.EqualTo(6f), "Default render_height");
+                Assert.That(props.Value.TopMeters[0], Is.EqualTo(5f), "Default render_height (the schema's 5 m)");
                 Assert.That(props.Value.BottomMeters[0], Is.EqualTo(0f), "Default render_min_height");
                 Assert.That(props.Value.Colors[0], Is.EqualTo(new Color32(255, 255, 255, 255)),
                     "no colour gives opaque white (identity for albedo *= vertexColor)");

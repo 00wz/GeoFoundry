@@ -6,9 +6,10 @@ namespace GeoFoundry.OpenMapTiles
 {
     /// <summary>
     /// Handler of the OpenMapTiles <c>boundary</c> layer: administrative boundaries styled by <c>admin_level</c>, with
-    /// <c>disputed</c> borders dashed and recolored, <c>maritime</c> borders tinted or hidden, a worldview filter on
-    /// <c>claimed_by</c>, and the outlines of <c>class=aboriginal_lands</c> polygons. Country names on either side of
-    /// a border (<c>adm0_l</c>/<c>adm0_r</c>) are not drawn: the <c>place</c> layer labels countries.
+    /// <c>disputed</c> borders dashed and recolored, <c>maritime</c> borders below country level hidden (as in the
+    /// style; maritime country borders are drawn like land borders), a worldview filter on <c>claimed_by</c>, and the
+    /// outlines of <c>class=aboriginal_lands</c> polygons. Country names on either side of a border
+    /// (<c>adm0_l</c>/<c>adm0_r</c>) are not drawn: the <c>place</c> layer labels countries.
     /// </summary>
     [CreateAssetMenu(menuName = "GeoFoundry/Layers/OpenMapTiles/Boundary", fileName = "OmtBoundary")]
     public sealed class OmtBoundaryHandler : OmtLayerHandler
@@ -27,10 +28,8 @@ namespace GeoFoundry.OpenMapTiles
 
         [SerializeField] private Vector2 _disputedDash = new Vector2(4, 3);
 
-        [Tooltip("Hides maritime borders (maritime=1) instead of tinting them.")]
-        [SerializeField] private bool _hideMaritime;
-
-        [SerializeField] private Color _maritimeColor = OmtStyleDefaults.BoundaryMaritime;
+        [Tooltip("Hides maritime borders below country level (maritime=1, admin_level other than 2), as the style does.")]
+        [SerializeField] private bool _hideMaritime = true;
 
         [Tooltip("ISO 3166-1 alpha-2 code of the worldview. Lines carrying claimed_by are claims of one country: with an " +
                  "empty worldview they are hidden, otherwise only the claims of that country are shown.")]
@@ -54,15 +53,7 @@ namespace GeoFoundry.OpenMapTiles
                 mods.Add(other);
             }
             if (_hideMaritime)
-            {
-                mods.Add(OmtModifier.Create("maritime", "", OmtModifierAction.Skip));
-            }
-            else
-            {
-                var maritime = OmtModifier.Create("maritime", "", OmtModifierAction.Recolor);
-                maritime.Color = OmtColor.ToVertex(_maritimeColor);
-                mods.Add(maritime);
-            }
+                mods.Add(OmtModifier.Create("maritime", "", OmtModifierAction.Skip).And("admin_level", "2", negate: true));
             var disputedColor = OmtModifier.Create("disputed", "", OmtModifierAction.Recolor);
             disputedColor.Color = OmtColor.ToVertex(_disputedColor);
             mods.Add(disputedColor);

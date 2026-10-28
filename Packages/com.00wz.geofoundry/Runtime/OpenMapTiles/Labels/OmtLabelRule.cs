@@ -85,6 +85,9 @@ namespace GeoFoundry.OpenMapTiles
         [Tooltip("Placement priority: lower values are placed first and win collisions.")]
         public int Priority;
 
+        [Tooltip("Features with a higher rank (the layer's rank attribute) are not labeled; 0 labels all.")]
+        [Min(0)] public int MaxRank;
+
         [Tooltip("Whether matching features are labeled. A hidden rule still matches and suppresses later rules.")]
         public bool Visible = true;
 
@@ -133,6 +136,12 @@ namespace GeoFoundry.OpenMapTiles
             MaxZoom = maxZoom;
             return this;
         }
+
+        public OmtLabelRule WithMaxRank(int maxRank)
+        {
+            MaxRank = maxRank;
+            return this;
+        }
     }
 
     /// <summary>Blittable form of <see cref="OmtLabelRule"/>.</summary>
@@ -155,6 +164,7 @@ namespace GeoFoundry.OpenMapTiles
         public float MinZoom;
         public float MaxZoom;
         public int Priority;
+        public int MaxRank;
         public bool Visible;
     }
 
@@ -187,6 +197,7 @@ namespace GeoFoundry.OpenMapTiles
                     MinZoom = r.MinZoom,
                     MaxZoom = r.MaxZoom,
                     Priority = r.Priority,
+                    MaxRank = r.MaxRank,
                     Visible = r.Visible,
                 };
             }

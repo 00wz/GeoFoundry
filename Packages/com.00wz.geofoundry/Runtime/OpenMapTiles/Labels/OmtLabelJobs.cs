@@ -98,7 +98,8 @@ namespace GeoFoundry.OpenMapTiles
     /// <summary>
     /// General label request generator shared by the label layers: matches Point (and/or LineString) features against
     /// label rules by <see cref="ClassKey"/>/<see cref="SubclassKey"/>, composes the text (<see cref="TextKind"/>),
-    /// resolves the icon, applies the rank filter and the skip modifiers, and writes one request per feature.
+    /// resolves the icon, applies the rank filters (<see cref="MaxRank"/>, <see cref="OmtLabelRule.MaxRank"/>) and
+    /// the skip modifiers, and writes one request per feature.
     /// </summary>
     [BurstCompile]
     internal struct OmtLabelRequestJob : IJob
@@ -175,6 +176,7 @@ namespace GeoFoundry.OpenMapTiles
 
                 double rank = RankKey.IsEmpty ? 0 : Props.GetNumber(fi, RankKey, 100);
                 if (MaxRank > 0 && rank > MaxRank) continue;
+                if (Rules[ri].MaxRank > 0 && rank > Rules[ri].MaxRank) continue;
 
                 if (!ComposeText(fi, out var text)) continue;
 

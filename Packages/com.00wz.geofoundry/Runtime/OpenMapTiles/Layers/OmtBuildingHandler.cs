@@ -27,8 +27,8 @@ namespace GeoFoundry.OpenMapTiles
         [Tooltip("Color of buildings without a colour attribute (multiplied with the material's base color).")]
         [SerializeField] private Color _defaultColor = OmtStyleDefaults.Building;
 
-        [Tooltip("Height used when render_height is missing, in meters.")]
-        [SerializeField, Min(0)] private float _defaultHeight = 6f;
+        [Tooltip("Height used when render_height is missing (the merged blocks of zoom 13), in meters; the schema uses 5 m.")]
+        [SerializeField, Min(0)] private float _defaultHeight = 5f;
 
         [Tooltip("Multiplier of all heights.")]
         [SerializeField, Range(0.1f, 5f)] private float _heightScale = 1f;

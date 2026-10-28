@@ -108,26 +108,28 @@ The package ships a complete set of handlers for the [OpenMapTiles](https://open
 (assembly `GeoFoundry.OpenMapTiles`, namespace `GeoFoundry.OpenMapTiles`), with ready-made assets in
 `Presets/OpenMapTiles/`. Every layer of the schema has a handler, and every attribute that carries rendering
 information is read. The default look follows the official "OSM OpenMapTiles" style (colors, widths, casings, dashes,
-icons, label fonts and zooms), and every table is editable in the inspector of the handler asset.
+icons, label fonts, zoom ranges, filters and draw order), never shows a class before the schema puts it into the
+tiles, and every table is editable in the inspector of the handler asset. The audit of the defaults against the schema
+and the style is in [omt-schema-audit.md](omt-schema-audit.md).
 
 | Layer | Handler | Output |
 |---|---|---|
 | `water` | `OmtWaterHandler` | fills by `class`; `intermittent` color; `brunnel=tunnel` hidden/dimmed |
-| `waterway` | `OmtWaterwayHandler` | ribbons by `class`; dashed `intermittent` and tunnels; bridges (aqueducts) with casing; names along lines |
-| `landcover` | `OmtLandcoverHandler` | fills by `subclass` with `class` fallbacks; outlines |
+| `waterway` | `OmtWaterwayHandler` | ribbons by `class`; dashed `intermittent` (rivers and other classes apart) and tunnels (from z14); bridges (aqueducts) with casing; names along lines |
+| `landcover` | `OmtLandcoverHandler` | fills by `subclass` from z9 with `class` fallbacks from z7; outlines |
 | `landuse` | `OmtLanduseHandler` | fills by `class` (`subclass` matchable); outlines; optional `access=no` fade |
-| `park` | `OmtParkHandler` | faint fill, casing outline, names by `rank` |
-| `boundary` | `OmtBoundaryHandler` | lines by `admin_level`; `disputed` dashed; `maritime` tinted/hidden; worldview filter on `claimed_by`; `aboriginal_lands` outlines |
+| `park` | `OmtParkHandler` | faint fill, outline band, names of rank 1–2 up to z12 |
+| `boundary` | `OmtBoundaryHandler` | lines by `admin_level` (2–4 drawn); `disputed` dashed; `maritime` below country level hidden; worldview filter on `claimed_by`; `aboriginal_lands` outlines |
 | `aeroway` | `OmtAerowayHandler` | area fills, runway/taxiway lines, `ref` labels |
-| `transportation` | `OmtTransportationHandler` | casing + fill + overlay ribbons by `class`/`subclass`; tunnels, ground and bridges ordered by `layer`; `ramp`, `service`, `surface`, `access`, `toll`, `indoor`, `level`; oneway arrows; pedestrian/bridge/pier areas |
-| `building` | `OmtBuildingHandler` | terrain-conforming extrusion by `render_height`/`render_min_height`, `colour` tint, `hide_3d` |
+| `transportation` | `OmtTransportationHandler` | casing + fill + overlay ribbons by `class`/`subclass`; tunnels, ground and bridges ordered by `layer`; links (`ramp`) narrower and from z11; faded rail `service` tracks; optional `service`, `surface`, `access`, `toll` tints; `indoor`, `level`; oneway arrows; pedestrian/bridge/pier areas |
+| `building` | `OmtBuildingHandler` | terrain-conforming extrusion by `render_height`/`render_min_height`, `colour` tint (hex or CSS color names, first of a list), `hide_3d` |
 | `water_name` | `OmtWaterNameHandler` | point labels by `class`, labels along lake center lines |
 | `transportation_name` | `OmtTransportationNameHandler` | street names along lines, `ref` shields, junction labels |
-| `place` | `OmtPlaceHandler` | names by `class` and `capital` (capital markers), placed by `rank` |
+| `place` | `OmtPlaceHandler` | names by `class` and `capital` (capital markers), placed by `rank`; states of rank 1–2; countries hidden by `iso_a2` |
 | `housenumber` | `OmtHousenumberHandler` | house numbers |
 | `poi` | `OmtPoiHandler` | icons by `subclass`/`class` with names, zoom-gated by class, placed by `rank`; `agg_stop`, `indoor`, `level` filters |
-| `mountain_peak` | `OmtMountainPeakHandler` | peak/volcano/saddle icons with name and elevation (m or ft by `customary_ft`); ridge/cliff lines |
-| `aerodrome_label` | `OmtAerodromeLabelHandler` | airport markers with name and IATA/ICAO code |
+| `mountain_peak` | `OmtMountainPeakHandler` | icons of peaks, volcanoes and saddles with an `ele`, with name and elevation (m or ft by `customary_ft`); ridge/cliff lines |
+| `aerodrome_label` | `OmtAerodromeLabelHandler` | markers of airports with an IATA code and their name (optionally the code or elevation) |
 
 ### Setup
 
@@ -166,17 +168,18 @@ follow `OmtDrawOrder`; a handler logs a warning in the inspector if an assigned 
 
 | Priority | Mesh | Priority | Mesh |
 |---|---|---|---|
-| −50 | terrain | −35 | aeroway lines |
-| −48 | landuse fill | −32 | transportation areas |
-| −47 | aeroway fill | −30 | transportation lines |
-| −46 / −45 | landcover fill / outline | −28 | waterway bridges |
-| −43 | landuse outline | −27 | mountain lines |
-| −42 | park fill | −26 | boundary |
-| −40 | water | −24 | park outline |
-| −38 | waterway | 0 | buildings |
+| −50 | terrain | −38 | aeroway lines |
+| −48 | landuse fill | −36 | landuse outline |
+| −47 | aeroway fill | −32 | transportation areas |
+| −46 / −45 | landcover fill / outline | −30 | transportation lines |
+| −44 | waterway | −28 | waterway bridges |
+| −43 | park fill | −27 | mountain lines |
+| −42 | water | −26 | boundary |
+| −40 | park outline | 0 | buildings |
 
 As in the style, land use and aeroway areas lie below the land cover, so a park or grass inside a residential area
-stays visible. Inside one mesh the order of the features is the draw order (casings below fills, tunnels below ground
+stays visible; waterway lines lie below the water polygons (a river line is covered by its riverbank); park outlines,
+aeroway lines and land use outlines lie above the water. Inside one mesh the order of the features is the draw order (casings below fills, tunnels below ground
 roads below bridges). Colors come from the style tables as vertex colors, so the preset materials have a white base
 color. The alpha of a color is the style's fill or line opacity: both draped shaders blend by the vertex alpha
 (staying in the opaque queue, where the Sorting Priority orders them), so semi-transparent fills such as the park
@@ -196,9 +199,21 @@ screen pixels at the camera's pixel size (`LineWidth`), plus the casing border o
 one at the center of the view (`MapViewShaderGlobals`), one value for the whole scene, so a line has the same world
 width on every tile whatever its zoom, including the coarse tiles shown close up while the detailed ones load, and
 perspective thins distant lines. Up close the real widths win; from afar the minimum pixels keep lines visible. A
-line rule's `MinZoom` is compared with the tile zoom when the tile is built (lower-zoom tiles skip the line) and
-with the camera zoom when rendering (the line fades in over half a zoom). The ribbons are built and draped onto the
-ground at the tile's pixel size; the shader resizes them along the ribbon and follows the ground's tangent plane.
+line rule's `MinZoom` (and its casing's `CasingMinZoom`) is a display zoom: the shader fades the line in over half a
+zoom as the camera reaches it. Lines are not filtered by the tile zoom, so a rule deeper than the deepest zoom of the
+source (e.g. path casings from 15 with a source ending at 14) still shows on that source's tiles viewed up close,
+whatever the source. A fill rule's `MinZoom` is a tile zoom (the surface shader has no fade): below it the polygon
+falls through to the next matching rule, so detailed subclass colors can start later than the class colors. The
+ribbons are built and draped onto the ground at the tile's pixel size; the shader resizes them along the ribbon and
+follows the ground's tangent plane.
+
+The style gives widths in pixels interpolated by zoom (`base` 1.2–1.4 for roads), while a rule gives a real width and
+a minimum in pixels: `max(WidthMeters / metersPerPixel, MinWidthPixels)`, so the real part doubles per zoom. The
+defaults were fitted to the style's widths over zooms 12–16 at Moscow's latitude: `WidthMeters` in 0.5 m steps and
+`MinWidthPixels` in 0.1 px steps minimizing the largest ratio to the style (×1.2–1.6 at some zoom of 12–16, ×1 for
+fixed widths such as borders). Casings are the style's outline width minus the fill width, per side, fitted the same
+way to `CasingMeters`/`CasingPixels`. Below zoom 12 lines keep their minimum width and are thicker than in the style
+(a motorway is 8.8 px at zoom 6, the style's 0.5 px).
 
 Labels are screen-space. The tile selection shows a tile of zoom `Z` while it is between `S / 2` and `S` pixels wide
 (`S` is `Lod.MaxTileScreenSizePixels`, mirrored in `OmtTextSettings.TileScreenSizePixels`), that is at display zooms
@@ -218,10 +233,13 @@ so labels of POIs inside buildings stay visible. The label materials' `Occlusion
 - `Depth Buffer`: the whole label gets the depth of the pulled anchor and is depth-tested per pixel, with no extra
   cost, but under a tilted camera the ground or a building in front can cut off part of a label.
 
-Label zooms follow the OpenMapTiles schema (3.x): a rule's minimum zoom is never below the tile zoom from which the
-schema puts its class into the tiles (quarters and neighbourhoods, most POIs and house numbers only at z14, bays at
-z13, airports other than international ones from z10, …), so labels fade in with the zoom instead of popping up with
-the tile that first carries them. The schema's `rank` is the order within each zoom's label grid (the same POI may be
+Zooms follow the OpenMapTiles schema (3.16): the minimum zoom of a fill, line or label rule is never below the tile
+zoom from which the schema puts its class into the tiles (primary roads from z8, tertiary z11, service roads z13,
+railways z8, subways and trams z14, land use other than residential z9, boundaries of admin level 5–6 from z10,
+quarters and neighbourhoods, most POIs and house numbers only at z14, bays at z13, …); otherwise the zoom is the
+style's. Labels thus fade in with the zoom instead of popping up with the tile that first carries them, and the style's
+maximum zooms apply (city names up to 14, capitals 15, countries and states 12, peaks 16, airports 17). Label
+priorities follow the order of the style's layers within a handler. The schema's `rank` is the order within each zoom's label grid (the same POI may be
 rank 1 at z13 and 5 at z14), so only the global ranks (up to 10 in `place`: countries, states, major cities) order
 the labels; equal priorities are resolved by the label text, so tiles of different zooms pick the same winners.
 
@@ -236,14 +254,31 @@ the labels; equal priorities are resolved by the label text, so tiles of differe
 - The schema sends different labels at different zooms by design (z14 carries far more POIs, short street names
   and house numbers than z13), and tiles switch instantly: a label that exists on only one of two zoom levels appears
   or disappears with its tile. There is no time-based cross-fade between tiles.
-- Labels are decluttered within a tile, across all its label layers (in the order the layers come in the tile;
-  house numbers yield to the other layers); collisions across tile borders are not resolved. Duplicates from the
+- Labels are decluttered within a tile, across all its label layers in the order the layers come in the tile (some
+  sources write them alphabetically), not in the style's layer order; house numbers yield to the other layers.
+  Collisions across tile borders are not resolved. Duplicates from the
   tile buffer are removed (only points inside the tile extent are labeled). A label takes space only from the zoom
   at which it becomes visible.
 - Text is laid out without complex shaping (Arabic joining, Indic scripts) or right-to-left reordering; scripts
   covered by the fonts (Latin, Cyrillic, Greek with Noto Sans) render correctly.
-- Fill patterns of the style (forest leaves, wetland reeds, military hatching) are not reproduced. Zoom-dependent
-  opacities (the medium-scale land cover fading in between zoom 7 and 10) are drawn at full opacity.
+- Fill patterns of the style (forest leaves, wetland reeds, military hatching, cemetery and quarry patterns) are not
+  reproduced; where the style colors a fill only under its pattern (bright yellow marsh), the class color is used.
+- One value per rule: zoom-interpolated colors, widths, opacities and text sizes of the style are not reproduced
+  (fills and lines use one color, labels the text size at zoom 14). Below zoom 12 lines are thicker than in the style
+  (see [Widths and zooms](#widths-and-zooms)). The maximum zoom of fills (the medium-scale land cover up to zoom 13)
+  and their opacity ramps are not reproduced.
+- A fill rule deeper than the deepest zoom of the source is never drawn (fills are filtered by the tile zoom); the
+  style's fill zooms are at most 13.
+- `line-offset` (park bands, military and theme park outlines drawn inside the area) and outline layers of their own
+  zoom (the park outline appears with its band from zoom 8, the style adds it at 14; the tram hatching appears with
+  the tram line) are not reproduced.
+- Text shown later than its icon (`text-field` zoom stops: airports from 8 with names from 11, peaks from 7 with names
+  from 12, the city dot below 7, the capital star below 8) is not reproduced: labels start at the text zoom, and the
+  capital star stays at all zooms. `text-variable-anchor`, `text-offset`, `text-line-height`, `icon-text-fit-padding`,
+  icon halos and icon opacity, and the −90° rotated, faded arrows of `Oneway opposite` are not reproduced (opposite
+  arrows are reversed `oneway` arrows; paths show only `oneway=1`).
+- The style's road layers distinguish `street`/`street_limited`/`link` classes that the schema does not write; those
+  layers have no effect and are not transcribed. The style's land use filter `suburbs` (a typo) is read as `suburb`.
 - In the deferred path a semi-transparent pixel keeps the smoothness, occlusion and material flags of the surface
   below (they are stored in the GBuffer alpha channels, which carry the coverage), as with URP's GBuffer decals; the
   presets use the same values on all draped materials. A custom semi-transparent draped shader must blend the same

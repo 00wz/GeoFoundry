@@ -9,7 +9,8 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
 {
     /// <summary>
     /// Label priorities of <see cref="OmtLabelRequestJob"/> stay the same between tiles of different zooms: only stable
-    /// ranks order the labels, and ties are broken by the text, not by the feature order in the tile.
+    /// ranks order the labels, and ties are broken by the text, not by the feature order in the tile. Also the
+    /// attribute filters of the handlers: <c>agg_stop</c>, rule rank limits, <c>iso_a2</c> and required attributes.
     /// </summary>
     public sealed class OmtLabelRequestJobTests
     {
@@ -41,12 +42,64 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
             Assert.That(a["Zamoskvorechye"].Key, Is.Not.EqualTo(a["Basmanny"].Key));
         }
 
+        [Test]
+        public void Poi_AggregatedStops_KeepOnlyTheMainStopOfAGroup()
+        {
+            // The schema sets agg_stop=1 on every stop, except the secondary stops of a uic_ref group (no agg_stop).
+            using var tile = new OmtTestTile("poi")
+                .Point(100, 100, ("class", "bus"), ("subclass", "bus_stop"), ("name", "Main"), ("agg_stop", 1))
+                .Point(110, 100, ("class", "bus"), ("subclass", "bus_stop"), ("name", "Secondary"))
+                .Point(200, 200, ("class", "railway"), ("subclass", "tram_stop"), ("name", "Tram"), ("agg_stop", 1))
+                .Point(300, 300, ("class", "cafe"), ("subclass", "cafe"), ("name", "Cafe"))
+                .Build();
+            var mods = new List<OmtModifier>();
+            OmtPoiHandler.AddAggregateStopModifiers(mods);
+
+            var result = Run(tile, OmtLabelDefaults.Poi(), "subclass", mods);
+            Assert.That(result.Keys, Is.EquivalentTo(new[] { "Main", "Tram", "Cafe" }), "other POIs have no agg_stop");
+        }
+
+        [Test]
+        public void Place_RuleRankLimit_AndHiddenCountries()
+        {
+            using var tile = new OmtTestTile("place")
+                .Point(100, 100, ("class", "state"), ("name", "Big state"), ("rank", 2))
+                .Point(200, 200, ("class", "state"), ("name", "Small state"), ("rank", 4))
+                .Point(300, 300, ("class", "country"), ("name", "Italy"), ("iso_a2", "IT"), ("rank", 1))
+                .Point(310, 300, ("class", "country"), ("name", "Vatican"), ("iso_a2", "VA"), ("rank", 6))
+                .Build();
+            var mods = new List<OmtModifier> { OmtModifier.Create("iso_a2", "VA", OmtModifierAction.Skip) };
+
+            var result = Run(tile, OmtLabelDefaults.Place(), "capital", mods);
+            Assert.That(result.Keys, Is.EquivalentTo(new[] { "Big state", "Italy" }), "states of rank 1–2 only; VA hidden");
+        }
+
+        [Test]
+        public void RequiredAttribute_SkipsFeaturesWithoutIt()
+        {
+            using var tile = new OmtTestTile("aerodrome_label")
+                .Point(100, 100, ("class", "international"), ("name", "Sheremetyevo"), ("iata", "SVO"))
+                .Point(200, 200, ("class", "other"), ("name", "Airfield"), ("icao", "UUMB"))
+                .Build();
+
+            var result = Run(tile, OmtLabelDefaults.AerodromeLabel(), "", new List<OmtModifier>(), "iata");
+            Assert.That(result.Keys, Is.EquivalentTo(new[] { "Sheremetyevo" }));
+        }
+
         private static Dictionary<string, OmtLabelRequest> Run(GeoFoundry.Core.Mvt.NativeMvtTile tile)
         {
-            var rules = OmtLabelRules.ToNative(OmtLabelDefaults.Place(), 1f, Allocator.TempJob);
+            var result = Run(tile, OmtLabelDefaults.Place(), "capital", new List<OmtModifier>());
+            Assert.That(result.Count, Is.EqualTo(3));
+            return result;
+        }
+
+        private static Dictionary<string, OmtLabelRequest> Run(GeoFoundry.Core.Mvt.NativeMvtTile tile,
+            List<OmtLabelRule> ruleList, string subclassKey, List<OmtModifier> mods, string requireKey = "")
+        {
+            var rules = OmtLabelRules.ToNative(ruleList, 1f, Allocator.TempJob);
             var nameKeys = OmtRules.ToNative(new List<string> { "name" }, Allocator.TempJob);
             var icons = new NativeHashMap<FixedString64Bytes, int>(1, Allocator.TempJob);
-            var modifiers = new NativeArray<OmtModifier>(0, Allocator.TempJob);
+            var modifiers = OmtModifiers.ToNative(mods, Allocator.TempJob);
             var output = new NativeList<OmtLabelRequest>(8, Allocator.TempJob);
             try
             {
@@ -60,8 +113,9 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
                     IconIds = icons,
                     Modifiers = modifiers,
                     ClassKey = OmtRules.Fixed("class"),
-                    SubclassKey = OmtRules.Fixed("capital"),
+                    SubclassKey = OmtRules.Fixed(subclassKey),
                     Points = true,
+                    RequireKey = OmtRules.Fixed(requireKey),
                     RankKey = OmtRules.Fixed("rank"),
                     StableRankLimit = 10,
                     Output = output,
@@ -69,7 +123,6 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
 
                 var result = new Dictionary<string, OmtLabelRequest>();
                 foreach (var request in output) result[request.Text.ToString()] = request;
-                Assert.That(result.Count, Is.EqualTo(3));
                 return result;
             }
             finally

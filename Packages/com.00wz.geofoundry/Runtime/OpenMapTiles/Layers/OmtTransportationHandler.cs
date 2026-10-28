@@ -19,11 +19,14 @@ namespace GeoFoundry.OpenMapTiles
     /// Lines are styled by <c>class</c> and <c>subclass</c> (paths with <c>bicycle=designated</c> or
     /// <c>horse=designated</c> are drawn as cycleways or bridleways). All lines are one mesh drawn in groups: tunnels
     /// (<c>brunnel=tunnel</c>, faded with a dashed casing), ground-level roads, then bridges (<c>brunnel=bridge</c>,
-    /// forced casing), each group ordered by <c>layer</c>; inside a group all casings are drawn first, then the fills
-    /// by class importance, then overlays (rail hatching, construction dashes). <c>ramp=1</c> links and minor
-    /// <c>service</c> roads (parking aisles, driveways) are narrower; <c>surface=unpaved</c>, <c>access=no</c> and
-    /// <c>toll=1</c> can be tinted; <c>indoor</c> ways and ways on non-zero <c>level</c>s can be hidden. Oneway arrows
-    /// (<c>oneway</c> = 1/-1) are optional icons along the lines.
+    /// forced casing: the rule's bridge casing or <see cref="_bridgeCasing"/>), each group ordered by <c>layer</c>;
+    /// inside a group all casings are drawn first, then the fills by class importance, then overlays (rail hatching,
+    /// construction dashes). <c>ramp=1</c> links are narrower and, except motorway links, start at
+    /// <see cref="_linkMinZoom"/> like the style's link layers; rail tracks with <c>service</c> siding, spur or yard
+    /// are faded. Optional, off by default (not in the style): narrower minor <c>service</c> roads (parking aisles,
+    /// driveways), tints of <c>surface=unpaved</c>, <c>access=no</c> and <c>toll=1</c>. <c>indoor</c> ways and ways
+    /// on non-zero <c>level</c>s can be hidden. Oneway arrows (<c>oneway</c> = 1/-1; paths only 1) are optional
+    /// icons along the lines.
     /// </para>
     /// <para>
     /// Polygons (pedestrian areas, bridge decks, platforms, piers) are a separate fill mesh. Attributes without a
@@ -49,20 +52,26 @@ namespace GeoFoundry.OpenMapTiles
         [Header("Attributes")]
         [SerializeField] private OmtTunnelMode _tunnels = OmtTunnelMode.Dim;
 
-        [Tooltip("Casing color of bridges whose rule has no casing.")]
+        [Tooltip("Casing color of bridges whose rule sets no bridge casing.")]
         [SerializeField] private Color _bridgeCasing = OmtStyleDefaults.BridgeCasing;
 
         [Tooltip("Width multiplier of links (ramp=1).")]
-        [SerializeField, Range(0.2f, 1f)] private float _rampWidth = 0.6f;
+        [SerializeField, Range(0.2f, 1f)] private float _rampWidth = 0.75f;
 
-        [Tooltip("Width multiplier of minor service roads (parking_aisle, driveway, drive-through).")]
-        [SerializeField, Range(0.2f, 1f)] private float _minorServiceWidth = 0.6f;
+        [Tooltip("Display zoom from which links (ramp=1) other than motorway links are drawn.")]
+        [SerializeField, Range(0, 24)] private float _linkMinZoom = 11f;
+
+        [Tooltip("Opacity of rail tracks with service siding, spur or yard.")]
+        [SerializeField, Range(0, 1)] private float _railServiceOpacity = 0.4f;
+
+        [Tooltip("Width multiplier of minor service roads (parking_aisle, driveway); 1 disables.")]
+        [SerializeField, Range(0.2f, 1f)] private float _minorServiceWidth = 1f;
 
         [Tooltip("Tint of unpaved roads (surface=unpaved) toward a dirt color; 0 disables.")]
-        [SerializeField, Range(0, 1)] private float _unpavedTint = 0.25f;
+        [SerializeField, Range(0, 1)] private float _unpavedTint;
 
         [Tooltip("Fade of roads with restricted access (access=no) toward the background; 0 disables.")]
-        [SerializeField, Range(0, 1)] private float _restrictedFade = 0.3f;
+        [SerializeField, Range(0, 1)] private float _restrictedFade;
 
         [Tooltip("Tint of toll roads (toll=1) toward violet; 0 disables.")]
         [SerializeField, Range(0, 1)] private float _tollTint;
@@ -96,22 +105,30 @@ namespace GeoFoundry.OpenMapTiles
 
             if (_text != null && _onewayArrows != null && _onewayArrows.Count > 0)
             {
+                // Roads and paths are two passes, as in the style: different spacing, and paths only for oneway=1.
+                var roads = new List<OmtModifier> { OmtModifier.Create("class", "path", OmtModifierAction.Skip) };
+                var notPath = OmtModifier.Create("class", "path", OmtModifierAction.Skip);
+                notPath.Negate = true;
+                var paths = new List<OmtModifier> { notPath, OmtModifier.Create("oneway", "-1", OmtModifierAction.Skip) };
                 await OmtLabels.BuildAsync(ctx, _text, new[]
                 {
-                    new OmtLabelPass(_onewayArrows, job =>
-                    {
-                        job.Points = false;
-                        job.Lines = true;
-                        job.TextKind = OmtLabelText.None;
-                        job.IconMode = OmtIconMode.Marker;
-                        job.RequireKey = OmtRules.Fixed("oneway");
-                        job.ReverseKey = OmtRules.Fixed("oneway");
-                        job.Flags = OmtLabelFlags.AllowOverlap | OmtLabelFlags.KeepDirection;
-                        job.Spacing = 95f;
-                        return job;
-                    }),
+                    new OmtLabelPass(_onewayArrows, job => ConfigureArrows(job, 95f), roads),
+                    new OmtLabelPass(_onewayArrows, job => ConfigureArrows(job, 125f), paths),
                 }, output, "OnewayArrows");
             }
+        }
+
+        private static OmtLabelRequestJob ConfigureArrows(OmtLabelRequestJob job, float spacing)
+        {
+            job.Points = false;
+            job.Lines = true;
+            job.TextKind = OmtLabelText.None;
+            job.IconMode = OmtIconMode.Marker;
+            job.RequireKey = OmtRules.Fixed("oneway");
+            job.ReverseKey = OmtRules.Fixed("oneway");
+            job.Flags = OmtLabelFlags.AllowOverlap | OmtLabelFlags.KeepDirection;
+            job.Spacing = spacing;
+            return job;
         }
 
         private async Awaitable<Mesh> BuildLinesAsync(LayerLoadContext ctx)
@@ -125,16 +142,16 @@ namespace GeoFoundry.OpenMapTiles
                     GeomTypes = ctx.Layer.FeatureGeomTypesSlice,
                     Props = OmtProps.From(ctx.Layer),
                     Rules = rules,
-                    Zoom = ctx.TileCoord.Z,
                     MercatorScale = OmtZoom.MercatorScale(ctx.TileCoord),
                     Tunnels = _tunnels,
                     BridgeCasing = OmtColor.ToVertex(_bridgeCasing),
                     White = OmtColor.ToVertex(Color.white),
-                    Black = OmtColor.ToVertex(Color.black),
                     Dirt = OmtColor.ToVertex(OmtColor.Parse("hsl(35, 45%, 60%)")),
                     Background = OmtColor.ToVertex(OmtStyleDefaults.Background),
                     Violet = OmtColor.ToVertex(OmtColor.Parse("hsl(280, 50%, 60%)")),
                     RampWidth = _rampWidth,
+                    LinkMinZoom = _linkMinZoom,
+                    RailServiceOpacity = _railServiceOpacity,
                     MinorServiceWidth = _minorServiceWidth,
                     UnpavedTint = _unpavedTint,
                     RestrictedFade = _restrictedFade,
@@ -169,7 +186,8 @@ namespace GeoFoundry.OpenMapTiles
 
     /// <summary>
     /// Builds the ordered draw list of the transportation lines; see <see cref="OmtTransportationHandler"/> for the
-    /// ordering and attribute rules.
+    /// ordering and attribute rules. Like <see cref="OmtLineItemsJob"/>, lines are not filtered by the tile zoom: each
+    /// item carries its minimum display zoom for the line shader.
     /// </summary>
     [BurstCompile]
     internal struct OmtTransportationItemsJob : IJob
@@ -177,11 +195,10 @@ namespace GeoFoundry.OpenMapTiles
         [ReadOnly] public NativeArray<MvtGeomType> GeomTypes;
         public OmtProps Props;
         [ReadOnly] public NativeArray<OmtLineRuleData> Rules;
-        public int Zoom;
         public float MercatorScale;
         public OmtTunnelMode Tunnels;
-        public Color32 BridgeCasing, White, Black, Dirt, Background, Violet;
-        public float RampWidth, MinorServiceWidth, UnpavedTint, RestrictedFade, TollTint;
+        public Color32 BridgeCasing, White, Dirt, Background, Violet;
+        public float RampWidth, LinkMinZoom, RailServiceOpacity, MinorServiceWidth, UnpavedTint, RestrictedFade, TollTint;
         public bool HideIndoor, HideOtherLevels;
 
         public NativeList<LineDrawItem> Output;
@@ -198,6 +215,7 @@ namespace GeoFoundry.OpenMapTiles
             public bool Casing;
             public Color32 CasingColor;
             public float2 CasingDash;
+            public float MinZoom;
         }
 
         private struct EntryComparer : System.Collections.Generic.IComparer<Entry>
@@ -219,9 +237,10 @@ namespace GeoFoundry.OpenMapTiles
             FixedString64Bytes kRamp = "ramp", kService = "service", kSurface = "surface", kAccess = "access";
             FixedString64Bytes kToll = "toll", kIndoor = "indoor", kLevel = "level", kBicycle = "bicycle", kHorse = "horse";
             FixedString64Bytes vTunnel = "tunnel", vBridge = "bridge", vPath = "path", vDesignated = "designated";
-            FixedString64Bytes vService = "service", vUnpaved = "unpaved", vNo = "no";
+            FixedString64Bytes vService = "service", vUnpaved = "unpaved", vNo = "no", vMotorway = "motorway";
+            FixedString64Bytes vRail = "rail", vSiding = "siding", vSpur = "spur", vYard = "yard";
             FixedString128Bytes sCycleway = "cycleway", sBridleway = "bridleway";
-            FixedString64Bytes vAisle = "parking_aisle", vDriveway = "driveway", vDriveThrough = "drive-through";
+            FixedString64Bytes vAisle = "parking_aisle", vDriveway = "driveway";
 
             var entries = new NativeList<Entry>(GeomTypes.Length, Allocator.Temp);
 
@@ -241,7 +260,7 @@ namespace GeoFoundry.OpenMapTiles
                 int ri = OmtRules.Match(Rules, cls, hasClass, sub, hasSub);
                 if (ri < 0) continue;
                 var rule = Rules[ri];
-                if (!rule.Visible || Zoom < rule.MinZoom) continue;
+                if (!rule.Visible) continue;
 
                 var e = new Entry
                 {
@@ -254,6 +273,7 @@ namespace GeoFoundry.OpenMapTiles
                     Color = rule.Color,
                     Casing = rule.HasCasing,
                     CasingColor = rule.CasingColor,
+                    MinZoom = rule.MinZoom,
                 };
 
                 if (Props.Is(fi, kBrunnel, vTunnel))
@@ -264,21 +284,28 @@ namespace GeoFoundry.OpenMapTiles
                     if (Tunnels == OmtTunnelMode.Dim)
                     {
                         e.Color = OmtModifiers.Mix(e.Color, White, 0.45f);
-                        e.CasingDash = new float2(1f, 0.5f);
+                        e.CasingDash = new float2(0.5f, 0.25f);
                     }
                 }
                 else if (Props.Is(fi, kBrunnel, vBridge))
                 {
                     e.Group = 2;
                     e.Layer = math.max(e.Layer, 1);
-                    e.CasingColor = rule.HasCasing ? OmtModifiers.Mix(rule.CasingColor, Black, 0.4f) : BridgeCasing;
+                    e.CasingColor = rule.HasBridgeCasing ? rule.BridgeCasingColor : BridgeCasing;
                     e.Casing = true;
                 }
 
-                if (Props.GetNumber(fi, kRamp, 0) == 1) e.Width = e.Width.ScaleCore(RampWidth);
+                if (Props.GetNumber(fi, kRamp, 0) == 1)
+                {
+                    e.Width = e.Width.ScaleCore(RampWidth);
+                    if (!(hasClass && cls.Equals(vMotorway))) e.MinZoom = math.max(e.MinZoom, LinkMinZoom);
+                }
                 if (hasClass && cls.Equals(vService) &&
-                    (Props.Is(fi, kService, vAisle) || Props.Is(fi, kService, vDriveway) || Props.Is(fi, kService, vDriveThrough)))
+                    (Props.Is(fi, kService, vAisle) || Props.Is(fi, kService, vDriveway)))
                     e.Width = e.Width.ScaleCore(MinorServiceWidth);
+                if (hasClass && cls.Equals(vRail) &&
+                    (Props.Is(fi, kService, vSiding) || Props.Is(fi, kService, vSpur) || Props.Is(fi, kService, vYard)))
+                    e.Color.a = (byte)math.round(e.Color.a * RailServiceOpacity);
                 if (UnpavedTint > 0f && Props.Is(fi, kSurface, vUnpaved)) e.Color = OmtModifiers.Mix(e.Color, Dirt, UnpavedTint);
                 if (TollTint > 0f && Props.IsTrue(fi, kToll)) e.Color = OmtModifiers.Mix(e.Color, Violet, TollTint);
                 if (RestrictedFade > 0f && Props.Is(fi, kAccess, vNo)) e.Color = OmtModifiers.Mix(e.Color, Background, RestrictedFade);
@@ -311,13 +338,14 @@ namespace GeoFoundry.OpenMapTiles
                 float bridge = e.Group == 2 ? 1f : 0f;
                 var w = e.Width.WithBorder(math.max(rule.CasingMeters, bridge) * MercatorScale,
                     math.max(rule.CasingPixels, bridge));
-                Output.Add(new LineDrawItem(e.Fi, w, e.CasingColor, e.CasingDash, LineDrawFlags.None, rule.MinZoom));
+                Output.Add(new LineDrawItem(e.Fi, w, e.CasingColor, e.CasingDash, LineDrawFlags.None,
+                    math.max(e.MinZoom, rule.CasingMinZoom)));
             }
             for (int i = start; i < end; i++)
             {
                 var e = entries[i];
                 var rule = Rules[e.Rule];
-                Output.Add(new LineDrawItem(e.Fi, e.Width, e.Color, rule.Dash, LineDrawFlags.None, rule.MinZoom));
+                Output.Add(new LineDrawItem(e.Fi, e.Width, e.Color, rule.Dash, LineDrawFlags.None, e.MinZoom));
             }
             for (int i = start; i < end; i++)
             {
@@ -325,7 +353,7 @@ namespace GeoFoundry.OpenMapTiles
                 var rule = Rules[e.Rule];
                 if (!rule.HasOverlay || rule.OverlayWidth <= 0f) continue;
                 Output.Add(new LineDrawItem(e.Fi, e.Width.ScaleCore(rule.OverlayWidth), rule.OverlayColor,
-                    rule.OverlayDash / rule.OverlayWidth, LineDrawFlags.None, rule.MinZoom));
+                    rule.OverlayDash / rule.OverlayWidth, LineDrawFlags.None, e.MinZoom));
             }
         }
     }

@@ -6,16 +6,16 @@ namespace GeoFoundry.OpenMapTiles
 {
     /// <summary>
     /// Handler of the OpenMapTiles <c>park</c> layer: protected areas (national parks, nature reserves, protected
-    /// areas by <c>class</c>) as a faint fill plus a casing outline, and park names at the label points (<c>name</c>;
+    /// areas by <c>class</c>) as a faint fill plus an outline band, and park names at the label points (<c>name</c>;
     /// <c>rank</c>, local to each zoom's label grid in the schema, only filters).
     /// </summary>
     [CreateAssetMenu(menuName = "GeoFoundry/Layers/OpenMapTiles/Park", fileName = "OmtPark")]
     public sealed class OmtParkHandler : OmtLayerHandler
     {
-        [Tooltip("Fill material (GeoFoundry/Surface Lit); leave empty to skip fills. Recommended Sorting Priority: -42.")]
+        [Tooltip("Fill material (GeoFoundry/Surface Lit); leave empty to skip fills. Recommended Sorting Priority: -43.")]
         [SerializeField] private Material _fillMaterial;
 
-        [Tooltip("Outline material (GeoFoundry/Line Lit); leave empty to skip outlines. Recommended Sorting Priority: -24.")]
+        [Tooltip("Outline material (GeoFoundry/Line Lit); leave empty to skip outlines. Recommended Sorting Priority: -40.")]
         [SerializeField] private Material _outlineMaterial;
 
         [SerializeField] private List<OmtFillRule> _fills = OmtStyleDefaults.ParkFills();

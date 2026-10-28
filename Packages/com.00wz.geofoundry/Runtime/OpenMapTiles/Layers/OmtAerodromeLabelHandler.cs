@@ -5,9 +5,10 @@ using UnityEngine;
 namespace GeoFoundry.OpenMapTiles
 {
     /// <summary>
-    /// Handler of the OpenMapTiles <c>aerodrome_label</c> layer: airport markers with the <c>name</c> and the IATA
-    /// code (<c>iata</c>, falling back to <c>icao</c>), prioritized by <c>class</c> (international first). The
-    /// elevation (<c>ele</c>/<c>ele_ft</c>) can be shown instead of the code.
+    /// Handler of the OpenMapTiles <c>aerodrome_label</c> layer: airport markers with the <c>name</c>, prioritized by
+    /// <c>class</c> (international first). Like the style, only airports with an IATA code (<c>iata</c>) are labeled
+    /// unless <see cref="_requireIata"/> is off. The IATA code (falling back to <c>icao</c>) or the elevation
+    /// (<c>ele</c>) can be shown below the name.
     /// </summary>
     [CreateAssetMenu(menuName = "GeoFoundry/Layers/OpenMapTiles/Aerodrome Label", fileName = "OmtAerodromeLabel")]
     public sealed class OmtAerodromeLabelHandler : OmtLayerHandler
@@ -24,18 +25,23 @@ namespace GeoFoundry.OpenMapTiles
         [SerializeField] private List<OmtLabelRule> _labels = OmtLabelDefaults.AerodromeLabel();
 
         [Tooltip("What is shown below the name.")]
-        [SerializeField] private SecondLine _secondLine = SecondLine.Code;
+        [SerializeField] private SecondLine _secondLine = SecondLine.None;
+
+        [Tooltip("Labels only airports with an IATA code, as the style does.")]
+        [SerializeField] private bool _requireIata = true;
 
         public override string LayerName => "aerodrome_label";
 
         protected override Awaitable BuildAsync(LayerLoadContext ctx, OmtTileOutput output)
         {
             var second = _secondLine;
+            bool requireIata = _requireIata;
             return OmtLabels.BuildAsync(ctx, _text, new[]
             {
                 new OmtLabelPass(_labels, job =>
                 {
                     job.IconMode = OmtIconMode.Marker;
+                    if (requireIata) job.RequireKey = OmtRules.Fixed("iata");
                     switch (second)
                     {
                         case SecondLine.Code:

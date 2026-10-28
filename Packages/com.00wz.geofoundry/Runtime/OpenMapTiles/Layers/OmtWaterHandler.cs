@@ -24,7 +24,7 @@ namespace GeoFoundry.OpenMapTiles
     public sealed class OmtWaterHandler : OmtLayerHandler
     {
         [Tooltip("Surface material (GeoFoundry/Surface Lit, white base color: colors come from the rules). " +
-                 "Recommended Sorting Priority: -40.")]
+                 "Recommended Sorting Priority: -42.")]
         [SerializeField] private Material _material;
 
         [Tooltip("Fill colors by class.")]

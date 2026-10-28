@@ -48,10 +48,10 @@ namespace GeoFoundry.OpenMapTiles
         public bool LinearizeColours;
         public bool UseColour;
 
-        /// <summary>6 m default height, no scaling, no minimum, opaque white, colours as is.</summary>
+        /// <summary>5 m default height (the schema's default), no scaling, no minimum, opaque white, colours as is.</summary>
         public static BuildingPropertyOptions Default => new BuildingPropertyOptions
         {
-            DefaultHeight = 6f,
+            DefaultHeight = 5f,
             HeightScale = 1f,
             MinHeight = 0f,
             DefaultColor = new Color32(255, 255, 255, 255),
@@ -86,6 +86,7 @@ namespace GeoFoundry.OpenMapTiles
             var topMeters = new NativeArray<float>(featureCount, Allocator.Persistent);
             var bottomMeters = new NativeArray<float>(featureCount, Allocator.Persistent);
             var colors = new NativeArray<Color32>(featureCount, Allocator.Persistent);
+            var named = OmtNamedColours.Create(Allocator.Persistent);
 
             var job = new BuildingPropertiesJob
             {
@@ -93,6 +94,7 @@ namespace GeoFoundry.OpenMapTiles
                 Tags = layer.Tags,
                 Keys = layer.Keys,
                 Values = layer.Values,
+                NamedColours = named,
                 Hidden = hidden,
                 TopMeters = topMeters,
                 BottomMeters = bottomMeters,
@@ -108,6 +110,7 @@ namespace GeoFoundry.OpenMapTiles
 
             JobHandle handle = job.Schedule();
             bool completed = await handle.WaitNonBlockingAsync(ct);
+            named.Dispose();
 
             if (!completed)
             {

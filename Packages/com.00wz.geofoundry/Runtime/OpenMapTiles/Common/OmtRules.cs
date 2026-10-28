@@ -9,7 +9,8 @@ namespace GeoFoundry.OpenMapTiles
     /// <summary>
     /// Fill style of the polygons matching <see cref="Class"/>/<see cref="Subclass"/> (empty matches any value).
     /// Rules are matched in list order and the first match wins, so put specific rules (with a subclass) before
-    /// generic ones.
+    /// generic ones. A rule below its <see cref="MinZoom"/> does not match, so a later, more generic rule can cover
+    /// the lower zooms (as the style's medium scale land cover does below its detailed layers).
     /// </summary>
     [Serializable]
     public sealed class OmtFillRule
@@ -23,7 +24,7 @@ namespace GeoFoundry.OpenMapTiles
         [Tooltip("Fill color (sRGB); alpha is the fill opacity (the layers below show through).")]
         public Color Color = Color.white;
 
-        [Tooltip("Minimum tile zoom at which the polygons are drawn.")]
+        [Tooltip("Minimum tile zoom at which the rule applies; on lower zooms the polygons fall through to the next matching rule.")]
         [Range(0, 22)] public int MinZoom;
 
         [Tooltip("Draw order inside the layer: lower values are drawn first and covered by higher ones.")]
@@ -79,6 +80,12 @@ namespace GeoFoundry.OpenMapTiles
         [Tooltip("Minimum casing width added on each side, in ground meters.")]
         [Min(0)] public float CasingMeters = 0.75f;
 
+        [Tooltip("Display zoom from which the casing is drawn; below the line's own minimum zoom it has no effect.")]
+        [Range(0, 24)] public float CasingMinZoom;
+
+        [Tooltip("Casing color of bridges (brunnel=bridge) in the transportation layer; alpha 0 uses the handler's bridge casing.")]
+        public Color BridgeCasingColor = new Color(0, 0, 0, 0);
+
         [Tooltip("Overlay color drawn above the fill (e.g. white rail hatching); alpha 0 disables the overlay.")]
         public Color OverlayColor = new Color(0, 0, 0, 0);
 
@@ -88,8 +95,8 @@ namespace GeoFoundry.OpenMapTiles
         [Tooltip("Overlay dash pattern in multiples of the line width (dash, gap); zero means solid.")]
         public Vector2 OverlayDash;
 
-        [Tooltip("Minimum zoom at which the line is drawn: tiles of lower zoom skip it, and it fades in as the camera zoom reaches it.")]
-        [Range(0, 22)] public int MinZoom;
+        [Tooltip("Display zoom from which the line is drawn: the line shader fades it in as the camera zoom reaches it, on tiles of any zoom.")]
+        [Range(0, 24)] public int MinZoom;
 
         [Tooltip("Draw order inside the layer: lower values are drawn first.")]
         public int Order;
@@ -116,6 +123,20 @@ namespace GeoFoundry.OpenMapTiles
             CasingColor = color;
             CasingPixels = pixels;
             CasingMeters = meters;
+            return this;
+        }
+
+        /// <summary>Draws the casing only from display zoom <paramref name="minZoom"/>.</summary>
+        public OmtLineRule WithCasingMinZoom(float minZoom)
+        {
+            CasingMinZoom = minZoom;
+            return this;
+        }
+
+        /// <summary>Sets the casing color of bridges of this rule (transportation).</summary>
+        public OmtLineRule WithBridgeCasing(Color color)
+        {
+            BridgeCasingColor = color;
             return this;
         }
 
@@ -158,6 +179,9 @@ namespace GeoFoundry.OpenMapTiles
         public bool HasCasing;
         public float CasingPixels;
         public float CasingMeters;
+        public float CasingMinZoom;
+        public Color32 BridgeCasingColor;
+        public bool HasBridgeCasing;
         public Color32 OverlayColor;
         public bool HasOverlay;
         public float OverlayWidth;
@@ -211,6 +235,9 @@ namespace GeoFoundry.OpenMapTiles
                     HasCasing = r.CasingColor.a > 0f,
                     CasingPixels = r.CasingPixels,
                     CasingMeters = r.CasingMeters,
+                    CasingMinZoom = r.CasingMinZoom,
+                    BridgeCasingColor = OmtColor.ToVertex(r.BridgeCasingColor),
+                    HasBridgeCasing = r.BridgeCasingColor.a > 0f,
                     OverlayColor = OmtColor.ToVertex(r.OverlayColor),
                     HasOverlay = r.OverlayColor.a > 0f,
                     OverlayWidth = r.OverlayWidth,
@@ -243,14 +270,17 @@ namespace GeoFoundry.OpenMapTiles
         public static bool Matches(in FixedString64Bytes rule, in FixedString128Bytes value, bool hasValue) =>
             rule.IsEmpty || (hasValue && value.Equals(rule));
 
-        /// <summary>Returns the index of the first fill rule matching the class/subclass, or -1.</summary>
+        /// <summary>
+        /// Returns the index of the first fill rule matching the class/subclass whose <see cref="OmtFillRule.MinZoom"/>
+        /// is reached at tile zoom <paramref name="zoom"/>, or -1.
+        /// </summary>
         public static int Match(NativeArray<OmtFillRuleData> rules,
-            in FixedString128Bytes cls, bool hasClass, in FixedString128Bytes sub, bool hasSub)
+            in FixedString128Bytes cls, bool hasClass, in FixedString128Bytes sub, bool hasSub, int zoom)
         {
             for (int i = 0; i < rules.Length; i++)
             {
                 var r = rules[i];
-                if (Matches(r.Class, cls, hasClass) && Matches(r.Subclass, sub, hasSub)) return i;
+                if (zoom >= r.MinZoom && Matches(r.Class, cls, hasClass) && Matches(r.Subclass, sub, hasSub)) return i;
             }
             return -1;
         }

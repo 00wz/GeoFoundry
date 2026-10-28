@@ -108,10 +108,10 @@ Copyright (c) 2024, MapTiler.com & OpenMapTiles contributors.
 
 The cartography and visual design of OpenMapTiles are licensed under the
 [Creative Commons Attribution 4.0 International License (CC-BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
-Changes made in GeoFoundry: colors, line widths, dash patterns, label sizes, fonts and minimum zooms were transcribed
-into C# tables and adapted to 3D rendering (pixel widths turned into minimum on-screen widths combined with real
-ground widths, fill patterns dropped, defaults added for
-classes the style does not draw); the SVG icons were rasterized at 2x, packed into one atlas, and the fill and line
+Changes made in GeoFoundry: colors, line widths, dash patterns, label sizes, fonts, zoom ranges, layer filters,
+label priorities and the layer order were transcribed into C# tables and adapted to 3D rendering (zoom-interpolated
+pixel widths fitted with real ground widths and minimum on-screen widths, minimum zooms raised to the zooms of the
+schema's data, fill patterns dropped, defaults added for classes the style does not draw); the SVG icons were rasterized at 2x, packed into one atlas, and the fill and line
 pattern icons were left out. The schema code of OpenMapTiles (BSD 3-Clause) is not included.
 
 The icons of the style are based on the symbols of [OpenStreetMap Carto](https://github.com/gravitystorm/openstreetmap-carto),

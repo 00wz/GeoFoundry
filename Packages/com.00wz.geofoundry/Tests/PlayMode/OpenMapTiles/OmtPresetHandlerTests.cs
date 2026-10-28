@@ -61,6 +61,42 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
             expectMeshes: 1);
 
         [UnityTest]
+        public IEnumerator Building_ReadsNamedAndListedColours_AndTheSchemaDefaultHeight() => OmtTestTile.Run(async ct =>
+        {
+            using var tile = new OmtTestTile("building")
+                .Polygon(Block, ("colour", "beige;brown"))
+                .Polygon(Block, ("colour", " Firebrick "))
+                .Polygon(Block, ("colour", "#aabbcc"))
+                .Polygon(Block, ("colour", "browm"))
+                .Polygon(Block)
+                .Build();
+            var props = await AsyncBuildingPropertyReader.ReadAsync(tile.GetLayer(0), BuildingPropertyOptions.Default, ct);
+            Assert.That(props, Is.Not.Null);
+            try
+            {
+                var colors = props.Value.Colors;
+                Assert.That(colors[0], Is.EqualTo(new Color32(245, 245, 220, 255)), "the first value of a list");
+                Assert.That(colors[1], Is.EqualTo(new Color32(178, 34, 34, 255)), "names in any case, trimmed");
+                Assert.That(colors[2], Is.EqualTo(new Color32(0xaa, 0xbb, 0xcc, 255)));
+                Assert.That(colors[3], Is.EqualTo(new Color32(255, 255, 255, 255)), "unknown values keep the default");
+                Assert.That(props.Value.TopMeters[4], Is.EqualTo(5f), "the schema's 5 m without render_height");
+            }
+            finally
+            {
+                props.Value.Dispose();
+            }
+        });
+
+        [UnityTest]
+        public IEnumerator PeakWithoutEle_AndAirportWithoutIata_AreNotLabeled() => OmtTestTile.Run(async ct =>
+        {
+            await RunEmpty("OmtMountainPeak", new OmtTestTile("mountain_peak")
+                .Point(2048, 2048, ("class", "peak"), ("name", "Hill"), ("rank", 1)), ct);
+            await RunEmpty("OmtAerodromeLabel", new OmtTestTile("aerodrome_label")
+                .Point(2048, 2048, ("class", "military"), ("name", "Airfield"), ("icao", "UUMB")), ct);
+        });
+
+        [UnityTest]
         public IEnumerator Place_BuildsTextLabelsWithRuntimeFontAtlas() => RunHandler("OmtPlace",
             new OmtTestTile("place")
                 .Point(2048, 2048, ("class", "city"), ("name", "Москва"), ("name:en", "Moscow"), ("capital", 2), ("rank", 1))
@@ -86,9 +122,10 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
             await RunOnce("OmtWaterway", new OmtTestTile("waterway")
                 .Line(Road, ("class", "river"), ("name", "Moskva"))
                 .Line(Road, ("class", "canal"), ("brunnel", "bridge")), 3, 0, ct);
+            // Fill and outline; park names end at zoom 12, below the labels' zooms on this z14 tile.
             await RunOnce("OmtPark", new OmtTestTile("park")
                 .Polygon(Block, ("class", "national_park"))
-                .Point(1000, 1000, ("class", "national_park"), ("name", "Losiny Ostrov"), ("rank", 1)), 3, 0, ct);
+                .Point(1000, 1000, ("class", "national_park"), ("name", "Losiny Ostrov"), ("rank", 1)), 2, 0, ct);
             await RunOnce("OmtAeroway", new OmtTestTile("aeroway")
                 .Polygon(Block, ("class", "aerodrome"))
                 .Line(Road, ("class", "runway"), ("ref", "06/24")), 3, 0, ct);
@@ -112,6 +149,29 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
 
         private static IEnumerator RunHandler(string asset, OmtTestTile tile, int expectMeshes, int expectSubmeshesAtLeast = 0) =>
             OmtTestTile.Run(ct => RunOnce(asset, tile, expectMeshes, expectSubmeshesAtLeast, ct));
+
+        private static async Awaitable RunEmpty(string asset, OmtTestTile tileBuilder, CancellationToken ct)
+        {
+            var handler = AssetDatabase.LoadAssetAtPath<OmtLayerHandler>(Presets + asset + ".asset");
+            Assert.That(handler, Is.Not.Null, $"preset {asset} loads");
+
+            using var tile = tileBuilder.Build();
+            using var ground = new FlatGroundGridProvider();
+            var root = new GameObject("TileRoot");
+            ILayerHandlerInstance instance = null;
+            try
+            {
+                var grid = GroundTestUtils.FlatGrid(ground, Coord);
+                var grids = new TileGroundGrids(grid, default, default, default, default, default, default, default, default);
+                instance = await handler.OnLayerLoadedAsync(new LayerLoadContext(tile.GetLayer(0), Coord, root.transform, Frame, grids, ct));
+                Assert.That(instance, Is.Null, $"{asset} builds nothing");
+            }
+            finally
+            {
+                instance?.Dispose();
+                Object.DestroyImmediate(root);
+            }
+        }
 
         private static async Awaitable RunOnce(string asset, OmtTestTile tileBuilder, int expectMeshes,
             int expectSubmeshesAtLeast, CancellationToken ct)

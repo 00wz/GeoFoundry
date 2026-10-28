@@ -8,8 +8,9 @@ namespace GeoFoundry.OpenMapTiles
     /// Handler of the OpenMapTiles <c>poi</c> layer: points of interest as icons named after <c>subclass</c> (falling
     /// back to <c>class</c>) with their <c>name</c>, colored, zoom-gated and placed by class (<c>rank</c>, local to each zoom's label grid in the schema, only
     /// filters). Indoor POIs
-    /// (<c>indoor=1</c>) and POIs on other <c>level</c>s can be hidden; with <c>agg_stop</c> only one stop of a group of
-    /// equally named public transport stops is labeled.
+    /// (<c>indoor=1</c>) and POIs on other <c>level</c>s can be hidden. The schema sets <c>agg_stop=1</c> on every
+    /// public transport stop (bus_stop, bus_station, tram_stop, subway) except the secondary stops of a group sharing
+    /// a <c>uic_ref</c>, which have no <c>agg_stop</c>; with <see cref="_aggregateStops"/> those are not labeled.
     /// </summary>
     [CreateAssetMenu(menuName = "GeoFoundry/Layers/OpenMapTiles/POI", fileName = "OmtPoi")]
     public sealed class OmtPoiHandler : OmtLayerHandler
@@ -27,8 +28,11 @@ namespace GeoFoundry.OpenMapTiles
         [Tooltip("Hides POIs whose level is not 0.")]
         [SerializeField] private bool _hideOtherLevels;
 
-        [Tooltip("Shows only the aggregated stop (agg_stop=1) of grouped public transport stops.")]
+        [Tooltip("Shows only the main stop of grouped public transport stops (stops without agg_stop are hidden).")]
         [SerializeField] private bool _aggregateStops = true;
+
+        /// <summary>Subclasses of public transport stops, which carry <c>agg_stop</c> in the schema.</summary>
+        private static readonly string[] StopSubclasses = { "bus_stop", "bus_station", "tram_stop", "subway" };
 
         public override string LayerName => "poi";
 
@@ -42,13 +46,7 @@ namespace GeoFoundry.OpenMapTiles
                 level.Negate = true;
                 mods.Add(level);
             }
-            if (_aggregateStops)
-            {
-                // Stops of an aggregated group carry agg_stop; only the one marked 1 is kept.
-                var agg = OmtModifier.Create("agg_stop", "1", OmtModifierAction.Skip);
-                agg.Negate = true;
-                mods.Add(agg);
-            }
+            if (_aggregateStops) AddAggregateStopModifiers(mods);
 
             int maxRank = _maxRank;
             return OmtLabels.BuildAsync(ctx, _text, new[]
@@ -63,6 +61,13 @@ namespace GeoFoundry.OpenMapTiles
                     return job;
                 }, mods),
             }, output, "PoiLabels");
+        }
+
+        /// <summary>Adds the modifiers skipping public transport stops without <c>agg_stop</c>.</summary>
+        internal static void AddAggregateStopModifiers(List<OmtModifier> mods)
+        {
+            foreach (var stop in StopSubclasses)
+                mods.Add(OmtModifier.Create("subclass", stop, OmtModifierAction.Skip).And("agg_stop", "", negate: true));
         }
     }
 }

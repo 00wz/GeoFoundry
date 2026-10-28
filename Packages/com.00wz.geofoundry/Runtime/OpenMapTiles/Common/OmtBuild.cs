@@ -135,7 +135,6 @@ namespace GeoFoundry.OpenMapTiles
                         Modifiers = mods,
                         ClassKey = OmtRules.Fixed(pass.ClassKey),
                         SubclassKey = OmtRules.Fixed(pass.SubclassKey),
-                        Zoom = ctx.TileCoord.Z,
                         MercatorScale = scale,
                         IncludeLines = pass.Lines,
                         OutlinePolygons = pass.Outlines,

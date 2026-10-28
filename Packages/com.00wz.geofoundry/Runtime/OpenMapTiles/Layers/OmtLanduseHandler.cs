@@ -15,7 +15,7 @@ namespace GeoFoundry.OpenMapTiles
         [Tooltip("Fill material (GeoFoundry/Surface Lit). Recommended Sorting Priority: -48.")]
         [SerializeField] private Material _fillMaterial;
 
-        [Tooltip("Outline material (GeoFoundry/Line Lit); leave empty to skip outlines. Recommended Sorting Priority: -43.")]
+        [Tooltip("Outline material (GeoFoundry/Line Lit); leave empty to skip outlines. Recommended Sorting Priority: -36.")]
         [SerializeField] private Material _outlineMaterial;
 
         [SerializeField] private List<OmtFillRule> _fills = OmtStyleDefaults.LanduseFills();

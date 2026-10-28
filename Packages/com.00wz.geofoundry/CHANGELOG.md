@@ -41,3 +41,25 @@ Initial release.
 - `GeoFoundryBootstrapper` and `GeoFoundryConfig` for setting up a map in a scene; a tile debug overlay and a state
   snapshot for a custom HUD.
 - Web builds: Burst jobs on WASM threads, a build validator, a menu for allowing HTTP.
+
+### Changed
+
+- OpenMapTiles defaults audited against the OpenMapTiles 3.16 schema and the "OSM OpenMapTiles" style
+  (`Documentation~/omt-schema-audit.md`): no fill, line or label rule starts before the schema puts its class into
+  the tiles (railways, primary to service roads, waterways, land use, land cover, boundaries, construction classes);
+  line widths fitted to the style's widths over zooms 12–16; the style's maximum zooms, rank and attribute filters
+  (states and parks of rank 1–2, airports with an IATA code, peaks with an elevation, Vatican City), colors, fonts,
+  text sizes and label priorities; the draw order follows the style (waterway below water; park, aeroway and land use
+  outlines above it). Rules for values the schema never writes were removed (`islet`, capital 1, several POI and
+  land cover subclasses).
+- Lines are no longer filtered by the tile zoom: every draw item carries its minimum display zoom for the line shader,
+  so rules deeper than the source's maximum zoom show on any source. A fill rule below its `MinZoom` falls through to
+  the next matching rule.
+- `OmtLineRule.CasingMinZoom`, `OmtLineRule.BridgeCasingColor` and `OmtLabelRule.MaxRank`; attribute modifiers take a
+  second condition and can raise the minimum zoom.
+- Transportation: links other than motorway links from zoom 11, faded rail service tracks, black bridge casings
+  (trunk and service bridges keep their own), the style's tunnel casing dashes; unpaved, restricted and minor service
+  adjustments are off by default.
+- `agg_stop` hides the secondary stops of grouped public transport stops (the schema marks every main stop with 1 and
+  leaves the others without it); maritime borders below country level are hidden instead of tinted; building
+  `colour` accepts CSS color names and lists, and the default height is the schema's 5 m.

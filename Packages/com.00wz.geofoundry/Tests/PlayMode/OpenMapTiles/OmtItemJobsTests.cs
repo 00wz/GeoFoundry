@@ -49,6 +49,36 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
         }
 
         [Test]
+        public void FillItems_RuleBelowItsMinZoom_FallsThroughToTheNextRule()
+        {
+            using var tile = new OmtTestTile("landcover")
+                .Polygon(Square, ("class", "grass"), ("subclass", "park"))
+                .Build();
+            var rules = new List<OmtFillRule>
+            {
+                new OmtFillRule("", "park", Color.red, 20, 13),
+                new OmtFillRule("grass", "", Color.green, 15, 7),
+            };
+
+            var z12 = RunFill(tile, rules, "class", "subclass", 12, new List<OmtModifier>());
+            var z13 = RunFill(tile, rules, "class", "subclass", 13, new List<OmtModifier>());
+            var z6 = RunFill(tile, rules, "class", "subclass", 6, new List<OmtModifier>());
+            try
+            {
+                Assert.That(z12.Length, Is.EqualTo(1));
+                Assert.That(z12[0].Color, Is.EqualTo(OmtColor.ToVertex(Color.green)), "the class rule below z13");
+                Assert.That(z13[0].Color, Is.EqualTo(OmtColor.ToVertex(Color.red)), "the subclass rule from z13");
+                Assert.That(z6.Length, Is.EqualTo(0), "no rule is active below z7");
+            }
+            finally
+            {
+                z12.Dispose();
+                z13.Dispose();
+                z6.Dispose();
+            }
+        }
+
+        [Test]
         public void FillItems_MinZoomHiddenRulesAndSkipModifiers_FilterFeatures()
         {
             using var tile = new OmtTestTile("water")
@@ -68,8 +98,10 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
             var items = RunFill(tile, rules, "class", "", 14, mods);
             try
             {
-                Assert.That(items.Length, Is.EqualTo(1), "tunnel skipped, ocean below its min zoom, pond hidden");
+                Assert.That(items.Length, Is.EqualTo(2), "tunnel skipped, pond hidden");
                 Assert.That(items[0].FeatureIndex, Is.EqualTo(0));
+                Assert.That(items[1].FeatureIndex, Is.EqualTo(2), "ocean below its rule's min zoom uses the generic rule");
+                Assert.That(items[1].Color, Is.EqualTo(OmtColor.ToVertex(Color.cyan)));
             }
             finally
             {
@@ -139,6 +171,67 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
         }
 
         [Test]
+        public void LineItems_AreNotFilteredByTileZoom_AndCarryTheirMinZooms()
+        {
+            using var tile = new OmtTestTile("transportation")
+                .Line(Segment, ("class", "path"))
+                .Build();
+            var rules = new List<OmtLineRule>
+            {
+                new OmtLineRule("path", "", Color.red, 0f, 1f, 0, 16).WithCasing(Color.white, 1f, 0f).WithCasingMinZoom(17),
+            };
+
+            // The job knows no tile zoom: a rule deeper than any source zoom is built and faded in by the shader.
+            var (primary, secondary) = RunLines(tile, new OmtLinePass { Rules = rules }, new List<OmtModifier>());
+            try
+            {
+                Assert.That(primary.Length, Is.EqualTo(2));
+                Assert.That(primary[0].MinZoom, Is.EqualTo(17f), "the casing from its own min zoom");
+                Assert.That(primary[1].MinZoom, Is.EqualTo(16f), "the fill from the rule's min zoom");
+            }
+            finally
+            {
+                primary.Dispose();
+                secondary.Dispose();
+            }
+        }
+
+        [Test]
+        public void Modifier_SecondConditionAndMinZoomAction()
+        {
+            using var tile = new OmtTestTile("waterway")
+                .Line(Segment, ("class", "river"), ("intermittent", 1))
+                .Line(Segment, ("class", "stream"), ("intermittent", 1))
+                .Line(Segment, ("class", "stream"), ("brunnel", "tunnel"))
+                .Line(Segment, ("class", "stream"))
+                .Build();
+            var rules = new List<OmtLineRule> { new OmtLineRule("", "", Color.blue, 2f, 0f, 0, 13) };
+            var other = OmtModifier.Create("intermittent", "", OmtModifierAction.Dash);
+            other.Dash = new float2(4, 3);
+            var river = OmtModifier.Create("intermittent", "", OmtModifierAction.Dash).And("class", "river");
+            river.Dash = new float2(3, 2);
+            var tunnel = OmtModifier.Create("brunnel", "tunnel", OmtModifierAction.MinZoom);
+            tunnel.MinZoom = 14f;
+
+            var (primary, secondary) = RunLines(tile, new OmtLinePass { Rules = rules },
+                new List<OmtModifier> { other, river, tunnel });
+            try
+            {
+                Assert.That(primary.Length, Is.EqualTo(4));
+                Assert.That(primary[0].Dash, Is.EqualTo(new float2(3, 2)), "both conditions hold: the later modifier wins");
+                Assert.That(primary[1].Dash, Is.EqualTo(new float2(4, 3)), "the second condition fails for streams");
+                Assert.That(primary[2].MinZoom, Is.EqualTo(14f), "the tunnel's minimum zoom is raised");
+                Assert.That(primary[3].MinZoom, Is.EqualTo(13f));
+                Assert.That(primary[3].Dash, Is.EqualTo(float2.zero));
+            }
+            finally
+            {
+                primary.Dispose();
+                secondary.Dispose();
+            }
+        }
+
+        [Test]
         public void Modifier_NegatedValue_MatchesPresentDifferentValuesOnly()
         {
             using var tile = new OmtTestTile("boundary")
@@ -192,14 +285,13 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
                     GeomTypes = layer.FeatureGeomTypesSlice,
                     Props = OmtProps.From(layer),
                     Rules = nativeRules,
-                    Zoom = 14,
                     MercatorScale = 1f,
                     Tunnels = OmtTunnelMode.Dim,
                     BridgeCasing = new Color32(0, 0, 0, 255),
                     White = new Color32(255, 255, 255, 255),
-                    Black = new Color32(0, 0, 0, 255),
                     RampWidth = 0.5f,
                     MinorServiceWidth = 1f,
+                    RailServiceOpacity = 1f,
                     Output = output,
                 }.Run();
 
@@ -218,6 +310,77 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
                 foreach (var item in output)
                     if (item.FeatureIndex == 4 && item.Color.Equals(OmtColor.ToVertex(Color.yellow)))
                         Assert.That(item.Width.Evaluate(0.01f), Is.EqualTo(5f).Within(1e-3f), "ramp halves the width");
+            }
+            finally
+            {
+                nativeRules.Dispose();
+                output.Dispose();
+            }
+        }
+
+        [Test]
+        public void Transportation_LinksRailServiceBridgeAndTunnelCasings()
+        {
+            using var tile = new OmtTestTile("transportation")
+                .Line(Segment, ("class", "primary"), ("ramp", 1))
+                .Line(Segment, ("class", "motorway"), ("ramp", 1))
+                .Line(Segment, ("class", "rail"), ("service", "yard"))
+                .Line(Segment, ("class", "trunk"), ("brunnel", "bridge"))
+                .Line(Segment, ("class", "primary"), ("brunnel", "bridge"))
+                .Line(Segment, ("class", "primary"), ("brunnel", "tunnel"))
+                .Build();
+            var trunkCasing = new Color(1f, 0f, 0f);
+            var rules = new List<OmtLineRule>
+            {
+                new OmtLineRule("primary", "", Color.yellow, 10f, 0f, 2, 8).WithCasing(Color.gray, 0f, 1f),
+                new OmtLineRule("motorway", "", Color.magenta, 10f, 0f, 3, 5).WithCasing(Color.gray, 0f, 1f),
+                new OmtLineRule("trunk", "", Color.cyan, 10f, 0f, 1, 5).WithCasing(trunkCasing, 0f, 1f)
+                    .WithBridgeCasing(trunkCasing),
+                new OmtLineRule("rail", "", Color.gray, 3f, 0f, 0, 8),
+            };
+
+            var nativeRules = OmtRules.ToNative(rules, Allocator.TempJob);
+            var output = new NativeList<LineDrawItem>(16, Allocator.TempJob);
+            try
+            {
+                var layer = tile.GetLayer(0);
+                var black = new Color32(0, 0, 0, 255);
+                new OmtTransportationItemsJob
+                {
+                    GeomTypes = layer.FeatureGeomTypesSlice,
+                    Props = OmtProps.From(layer),
+                    Rules = nativeRules,
+                    MercatorScale = 1f,
+                    Tunnels = OmtTunnelMode.Dim,
+                    BridgeCasing = black,
+                    White = new Color32(255, 255, 255, 255),
+                    RampWidth = 0.75f,
+                    LinkMinZoom = 11f,
+                    RailServiceOpacity = 0.4f,
+                    MinorServiceWidth = 1f,
+                    Output = output,
+                }.Run();
+
+                LineDrawItem Fill(int fi)
+                {
+                    foreach (var item in output)
+                        if (item.FeatureIndex == fi && item.Width.ExtraMeters == 0f) return item;
+                    throw new AssertionException($"no fill of feature {fi}");
+                }
+                LineDrawItem Casing(int fi)
+                {
+                    foreach (var item in output)
+                        if (item.FeatureIndex == fi && item.Width.ExtraMeters > 0f) return item;
+                    throw new AssertionException($"no casing of feature {fi}");
+                }
+
+                Assert.That(Fill(0).MinZoom, Is.EqualTo(11f), "links other than motorway links from the link zoom");
+                Assert.That(Fill(0).Width.Meters, Is.EqualTo(7.5f).Within(1e-4f));
+                Assert.That(Fill(1).MinZoom, Is.EqualTo(5f), "motorway links keep the road's zoom");
+                Assert.That(Fill(2).Color.a, Is.EqualTo(102), "rail service tracks at 40 % opacity");
+                Assert.That(Casing(3).Color, Is.EqualTo(OmtColor.ToVertex(trunkCasing)), "the rule's bridge casing");
+                Assert.That(Casing(4).Color, Is.EqualTo(black), "the handler's bridge casing");
+                Assert.That(Casing(5).Dash, Is.EqualTo(new float2(0.5f, 0.25f)), "dashed tunnel casing");
             }
             finally
             {
@@ -267,7 +430,6 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
                 Modifiers = nativeMods,
                 ClassKey = OmtRules.Fixed(pass.ClassKey),
                 SubclassKey = OmtRules.Fixed(pass.SubclassKey),
-                Zoom = 14,
                 MercatorScale = 1f,
                 IncludeLines = pass.Lines,
                 OutlinePolygons = pass.Outlines,

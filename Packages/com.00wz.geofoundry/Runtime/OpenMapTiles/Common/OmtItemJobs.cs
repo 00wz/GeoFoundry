@@ -26,24 +26,34 @@ namespace GeoFoundry.OpenMapTiles
         Secondary,
         /// <summary>The fill color is mixed toward <see cref="OmtModifier.Color"/> by <see cref="OmtModifier.Scale"/>.</summary>
         Tint,
+        /// <summary>
+        /// The minimum zoom is raised to <see cref="OmtModifier.MinZoom"/>: the display zoom from which a line is drawn
+        /// (all its items), or the tile zoom from which a polygon is filled.
+        /// </summary>
+        MinZoom,
     }
 
     /// <summary>
     /// Attribute-based adjustment applied on top of the matched rule: when the feature's <see cref="Key"/> equals
     /// <see cref="Value"/> (or is truthy if <see cref="Value"/> is empty), <see cref="Action"/> is applied. With
     /// <see cref="Negate"/> the condition becomes "the key is present and differs from <see cref="Value"/>" (or, with
-    /// an empty <see cref="Value"/>, "the key is absent or falsy"). Several
+    /// an empty <see cref="Value"/>, "the key is absent or falsy"). An optional second condition (<see cref="Key2"/>,
+    /// <see cref="Value2"/>, <see cref="Negate2"/>, same semantics, see <see cref="And"/>) must hold as well. Several
     /// modifiers may apply to one feature, in array order.
     /// </summary>
     internal struct OmtModifier
     {
         public FixedString64Bytes Key;
         public FixedString64Bytes Value;
+        public bool Negate;
+        public FixedString64Bytes Key2;
+        public FixedString64Bytes Value2;
+        public bool Negate2;
         public OmtModifierAction Action;
         public Color32 Color;
         public float2 Dash;
         public float Scale;
-        public bool Negate;
+        public float MinZoom;
 
         public static OmtModifier Create(string key, string value, OmtModifierAction action) => new OmtModifier
         {
@@ -53,11 +63,24 @@ namespace GeoFoundry.OpenMapTiles
             Scale = 1f,
         };
 
-        public bool Applies(ref OmtProps props, int fi)
+        /// <summary>Returns this modifier with a second condition that must hold as well.</summary>
+        public OmtModifier And(string key, string value, bool negate = false)
         {
-            if (Value.IsEmpty) return props.IsTrue(fi, Key) != Negate;
-            if (!Negate) return props.Is(fi, Key, Value);
-            return props.TryGetNonEmpty(fi, Key, out var text) && !text.Equals(Value);
+            Key2 = OmtRules.Fixed(key);
+            Value2 = OmtRules.Fixed(value);
+            Negate2 = negate;
+            return this;
+        }
+
+        public bool Applies(ref OmtProps props, int fi) =>
+            Test(ref props, fi, Key, Value, Negate) && (Key2.IsEmpty || Test(ref props, fi, Key2, Value2, Negate2));
+
+        private static bool Test(ref OmtProps props, int fi, in FixedString64Bytes key, in FixedString64Bytes value,
+            bool negate)
+        {
+            if (value.IsEmpty) return props.IsTrue(fi, key) != negate;
+            if (!negate) return props.Is(fi, key, value);
+            return props.TryGetNonEmpty(fi, key, out var text) && !text.Equals(value);
         }
     }
 
@@ -95,8 +118,9 @@ namespace GeoFoundry.OpenMapTiles
 
     /// <summary>
     /// Builds the ordered <see cref="SurfaceDrawItem"/> list of a polygon layer: matches every Polygon feature
-    /// against the fill rules by <see cref="ClassKey"/>/<see cref="SubclassKey"/>, applies the zoom filter and the
-    /// modifiers, and sorts the result by rule order.
+    /// against the fill rules active at the tile zoom (see <see cref="OmtFillRule"/>) by
+    /// <see cref="ClassKey"/>/<see cref="SubclassKey"/>, applies the modifiers, and sorts the result by rule order.
+    /// The surface shader has no zoom fade, so fills are filtered by the tile zoom.
     /// </summary>
     [BurstCompile]
     internal struct OmtFillItemsJob : IJob
@@ -123,10 +147,10 @@ namespace GeoFoundry.OpenMapTiles
                 FixedString128Bytes cls = default, sub = default;
                 bool hasClass = !ClassKey.IsEmpty && Props.TryGetText(fi, ClassKey, out cls);
                 bool hasSub = !SubclassKey.IsEmpty && Props.TryGetText(fi, SubclassKey, out sub);
-                int ri = OmtRules.Match(Rules, cls, hasClass, sub, hasSub);
+                int ri = OmtRules.Match(Rules, cls, hasClass, sub, hasSub, Zoom);
                 if (ri < 0) continue;
                 var rule = Rules[ri];
-                if (!rule.Visible || Zoom < rule.MinZoom) continue;
+                if (!rule.Visible) continue;
 
                 Color32 color = rule.Color;
                 bool skip = false;
@@ -139,6 +163,7 @@ namespace GeoFoundry.OpenMapTiles
                         case OmtModifierAction.Skip: skip = true; break;
                         case OmtModifierAction.Recolor: color = mod.Color; break;
                         case OmtModifierAction.Tint: color = OmtModifiers.Mix(color, mod.Color, mod.Scale); break;
+                        case OmtModifierAction.MinZoom: skip = Zoom < mod.MinZoom; break;
                     }
                 }
                 if (skip) continue;
@@ -158,9 +183,11 @@ namespace GeoFoundry.OpenMapTiles
 
     /// <summary>
     /// Builds the ordered <see cref="LineDrawItem"/> lists of a line layer: matches LineString features (and, with
-    /// <see cref="OutlinePolygons"/>, Polygon outlines) against the line rules, applies zoom filters and modifiers,
-    /// sorts by rule order and emits three passes per output: all casings, all fills, all overlays. Features with the
-    /// <see cref="OmtModifierAction.Secondary"/> modifier go to <see cref="Secondary"/>.
+    /// <see cref="OutlinePolygons"/>, Polygon outlines) against the line rules, applies the modifiers, sorts by rule
+    /// order and emits three passes per output: all casings, all fills, all overlays. Features with the
+    /// <see cref="OmtModifierAction.Secondary"/> modifier go to <see cref="Secondary"/>. Lines are not filtered by
+    /// the tile zoom: every item carries its minimum display zoom, by which the line shader hides and fades it, so a
+    /// rule deeper than the source's maximum zoom still shows on that source's tiles viewed up close.
     /// </summary>
     [BurstCompile]
     internal struct OmtLineItemsJob : IJob
@@ -171,7 +198,6 @@ namespace GeoFoundry.OpenMapTiles
         [ReadOnly] public NativeArray<OmtModifier> Modifiers;
         public FixedString64Bytes ClassKey;
         public FixedString64Bytes SubclassKey;
-        public int Zoom;
         public float MercatorScale;
         public bool IncludeLines;
         public bool OutlinePolygons;
@@ -188,6 +214,7 @@ namespace GeoFoundry.OpenMapTiles
             public float2 Dash;
             public bool Casing;
             public bool Outline;
+            public float MinZoom;
         }
 
         public void Execute()
@@ -208,7 +235,7 @@ namespace GeoFoundry.OpenMapTiles
                 int ri = OmtRules.Match(Rules, cls, hasClass, sub, hasSub);
                 if (ri < 0) continue;
                 var rule = Rules[ri];
-                if (!rule.Visible || Zoom < rule.MinZoom) continue;
+                if (!rule.Visible) continue;
 
                 var r = new Resolved
                 {
@@ -219,6 +246,7 @@ namespace GeoFoundry.OpenMapTiles
                     Dash = rule.Dash,
                     Casing = rule.HasCasing,
                     Outline = outline,
+                    MinZoom = rule.MinZoom,
                 };
                 bool skip = false, toSecondary = false;
                 for (int m = 0; m < Modifiers.Length && !skip; m++)
@@ -234,6 +262,7 @@ namespace GeoFoundry.OpenMapTiles
                         case OmtModifierAction.WidthScale: r.Width = r.Width.ScaleCore(mod.Scale); break;
                         case OmtModifierAction.NoCasing: r.Casing = false; break;
                         case OmtModifierAction.Secondary: toSecondary = true; break;
+                        case OmtModifierAction.MinZoom: r.MinZoom = math.max(r.MinZoom, mod.MinZoom); break;
                     }
                 }
                 if (skip || (r.Width.Meters <= 0f && r.Width.Pixels <= 0f)) continue;
@@ -270,16 +299,16 @@ namespace GeoFoundry.OpenMapTiles
                             if (!r.Casing) break;
                             output.Add(new LineDrawItem(r.Fi,
                                 r.Width.WithBorder(rule.CasingMeters * MercatorScale, rule.CasingPixels),
-                                rule.CasingColor, default, flags, rule.MinZoom));
+                                rule.CasingColor, default, flags, math.max(r.MinZoom, rule.CasingMinZoom)));
                             break;
                         case 1:
-                            output.Add(new LineDrawItem(r.Fi, r.Width, r.Color, r.Dash, flags, rule.MinZoom));
+                            output.Add(new LineDrawItem(r.Fi, r.Width, r.Color, r.Dash, flags, r.MinZoom));
                             break;
                         case 2:
                             if (!rule.HasOverlay || rule.OverlayWidth <= 0f) break;
                             // The overlay dash is relative to the fill width; the item's dash to its own core.
                             output.Add(new LineDrawItem(r.Fi, r.Width.ScaleCore(rule.OverlayWidth), rule.OverlayColor,
-                                rule.OverlayDash / rule.OverlayWidth, flags, rule.MinZoom));
+                                rule.OverlayDash / rule.OverlayWidth, flags, r.MinZoom));
                             break;
                     }
                 }

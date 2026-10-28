@@ -7,13 +7,15 @@ namespace GeoFoundry.OpenMapTiles
 {
     /// <summary>
     /// Handler of the OpenMapTiles <c>waterway</c> layer: rivers, canals, streams, drains and ditches as ribbons sized
-    /// by <c>class</c>; <c>intermittent</c> waterways dashed; tunnels (<c>brunnel=tunnel</c>) dashed and faded;
-    /// bridges (aqueducts) in a separate mesh with a casing drawn above the roads; names along the lines.
+    /// by <c>class</c>; <c>intermittent</c> waterways dashed (rivers and other classes with the style's two
+    /// patterns); tunnels (<c>brunnel=tunnel</c>) dashed from <see cref="OmtStyleDefaults.WaterwayTunnelMinZoom"/>;
+    /// bridges (aqueducts) in a separate mesh with a casing drawn above the roads, one width for all classes as in the
+    /// style; names along the lines.
     /// </summary>
     [CreateAssetMenu(menuName = "GeoFoundry/Layers/OpenMapTiles/Waterway", fileName = "OmtWaterway")]
     public sealed class OmtWaterwayHandler : OmtLayerHandler
     {
-        [Tooltip("Line material (GeoFoundry/Line Lit). Recommended Sorting Priority: -38.")]
+        [Tooltip("Line material (GeoFoundry/Line Lit). Recommended Sorting Priority: -44.")]
         [SerializeField] private Material _material;
 
         [Tooltip("Material of waterway bridges (GeoFoundry/Line Lit); empty draws them with the regular lines. " +
@@ -22,10 +24,13 @@ namespace GeoFoundry.OpenMapTiles
 
         [SerializeField] private List<OmtLineRule> _lines = OmtStyleDefaults.WaterwayLines();
 
-        [Tooltip("Dash pattern of intermittent waterways in multiples of the width.")]
+        [Tooltip("Dash pattern of intermittent rivers in multiples of the width.")]
         [SerializeField] private Vector2 _intermittentDash = new Vector2(3, 2);
 
-        [SerializeField] private OmtTunnelMode _tunnels = OmtTunnelMode.Dim;
+        [Tooltip("Dash pattern of intermittent waterways of other classes in multiples of the width.")]
+        [SerializeField] private Vector2 _intermittentOtherDash = new Vector2(4, 3);
+
+        [SerializeField] private OmtTunnelMode _tunnels = OmtTunnelMode.Show;
 
         [SerializeField] private Color _bridgeCasing = OmtStyleDefaults.WaterwayBridgeCasing;
 
@@ -42,14 +47,20 @@ namespace GeoFoundry.OpenMapTiles
             {
                 var mods = new List<OmtModifier>();
                 var intermittent = OmtModifier.Create("intermittent", "", OmtModifierAction.Dash);
-                intermittent.Dash = new float2(_intermittentDash.x, _intermittentDash.y);
+                intermittent.Dash = new float2(_intermittentOtherDash.x, _intermittentOtherDash.y);
                 mods.Add(intermittent);
+                var intermittentRiver = OmtModifier.Create("intermittent", "", OmtModifierAction.Dash).And("class", "river");
+                intermittentRiver.Dash = new float2(_intermittentDash.x, _intermittentDash.y);
+                mods.Add(intermittentRiver);
                 OmtLayerHelpers.AddTunnelModifier(mods, _tunnels);
                 if (_tunnels != OmtTunnelMode.Hide)
                 {
                     var tunnelDash = OmtModifier.Create("brunnel", "tunnel", OmtModifierAction.Dash);
                     tunnelDash.Dash = new float2(2, 4);
                     mods.Add(tunnelDash);
+                    var tunnelZoom = OmtModifier.Create("brunnel", "tunnel", OmtModifierAction.MinZoom);
+                    tunnelZoom.MinZoom = OmtStyleDefaults.WaterwayTunnelMinZoom;
+                    mods.Add(tunnelZoom);
                 }
 
                 // With a bridge material, bridges are drawn by a second mesh above the roads instead.
@@ -64,8 +75,10 @@ namespace GeoFoundry.OpenMapTiles
                     foreach (var r in _lines)
                     {
                         bridgeRules.Add(new OmtLineRule(r.Class, r.Subclass, OmtStyleDefaults.WaterwayBridgeFill,
-                                r.WidthMeters, r.MinWidthPixels, r.Order, r.MinZoom) { Visible = r.Visible }
-                            .WithCasing(_bridgeCasing, 1f, 1.5f));
+                                OmtStyleDefaults.WaterwayBridgeMeters, OmtStyleDefaults.WaterwayBridgePixels, r.Order,
+                                r.MinZoom) { Visible = r.Visible }
+                            .WithCasing(_bridgeCasing, OmtStyleDefaults.WaterwayBridgeCasingPixels,
+                                OmtStyleDefaults.WaterwayBridgeCasingMeters));
                     }
                     var (bridges, _) = await OmtBuild.LinesAsync(ctx, new[]
                     {
