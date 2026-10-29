@@ -13,6 +13,7 @@ using GeoFoundry.Core.Sources;
 using GeoFoundry.Core.TileSelection;
 using GeoFoundry.Geometry;
 using GeoFoundry.Ground;
+using GeoFoundry.TileIO.Net;
 using GeoFoundry.Tiles;
 using GeoFoundry.Tiles.Diagnostics;
 using Unity.Collections;
@@ -75,10 +76,10 @@ namespace GeoFoundry.Tests.PlayMode.Tiles
         }
 
         /// <summary>
-        /// <see cref="DemGroundGridProvider"/> logs a DEM failure as an error, one per DEM of each grid, so their count
-        /// depends on load timing and <see cref="LogAssert.Expect(LogType, Regex)"/> (one message per call) does not
-        /// fit. Instead, logged errors do not fail the test by themselves, and <see cref="TearDown"/> checks that none
-        /// of them is anything but a DEM failure.
+        /// The DEM cache logs a DEM failure as an error, one per failed load. A failed tile is not cached, so grids
+        /// loaded later fetch it again, and the count depends on load timing: <see cref="LogAssert.Expect(LogType, Regex)"/>
+        /// (one message per call) does not fit. Instead, logged errors do not fail the test by themselves, and
+        /// <see cref="TearDown"/> checks that none of them is anything but a DEM failure.
         /// </summary>
         private void ExpectDemFailureLogs()
         {
@@ -88,7 +89,7 @@ namespace GeoFoundry.Tests.PlayMode.Tiles
             LogAssert.ignoreFailingMessages = true;
         }
 
-        private static readonly Regex DemFailureLog = new Regex(@"^System\.InvalidOperationException: DEM tile \S+ load failed");
+        private static readonly Regex DemFailureLog = new Regex(@"^\[GeoFoundry\] Unexpected error loading DEM tile ");
 
         private List<string> _unexpectedErrors;
 
@@ -146,8 +147,8 @@ namespace GeoFoundry.Tests.PlayMode.Tiles
         }
 
         /// <summary>
-        /// DEM is unavailable: <see cref="DemGroundGridProvider"/> fills the grid with the default height and logs the
-        /// failure as an error (see <see cref="ExpectDemFailureLogs"/>).
+        /// DEM is unavailable: the DEM cache logs the failure as an error (see <see cref="ExpectDemFailureLogs"/>), and
+        /// <see cref="DemGroundGridProvider"/> fills the grid with the default height.
         /// </summary>
         private sealed class FailingDemTileSource : IDemTileSource
         {
@@ -664,13 +665,14 @@ namespace GeoFoundry.Tests.PlayMode.Tiles
             yield return WaitFor(() => source.Cancelled.Contains(dropped), "cancellation of the unwanted tile");
 
             // LogAssert matches expectations in order: the manager logs first, then raises the event.
-            LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex(@"Failed .*HTTP 404"));
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"Failed .*Not Found"));
             LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("subscriber is broken"));
             source.Pending[failed].SetException(new TileDownloadException("http://test", 404, "Not Found"));
             yield return WaitFor(() => failures.Count > 0, "failure event");
             yield return WaitFor(() => selector.Failed.Contains(failed), "failure passed to the selector");
 
             Assert.That(failures.Select(f => f.Coord), Is.EqualTo(new[] { failed }), "cancellation is not a failure");
+            // The manager knows only TileSourceException; the source's subclass reaches subscribers as is.
             Assert.That(failures[0].Error, Is.InstanceOf<TileDownloadException>());
             Assert.That(((TileDownloadException)failures[0].Error).HttpStatus, Is.EqualTo(404));
         }

@@ -19,8 +19,8 @@ namespace GeoFoundry.Core.Sources
         /// without leaking any allocation.</param>
         /// <returns>The tile bytes, allocated with <paramref name="allocator"/>. The caller owns the array and must
         /// dispose it.</returns>
-        /// <exception cref="TileDownloadException">The tile cannot be downloaded: a 4xx or another non-retryable
-        /// error, or retries are exhausted.</exception>
+        /// <exception cref="TileSourceException">The source cannot provide the tile (retries exhausted, a refused
+        /// request, corrupt data); a source throws its own subclass with the details of its transport.</exception>
         Awaitable<NativeArray<byte>> GetTileAsync(TileCoord coord, Allocator allocator, CancellationToken ct);
     }
 }

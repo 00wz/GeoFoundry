@@ -29,6 +29,9 @@ namespace GeoFoundry.Ground
     /// 8 neighbors: a missing DEM tile is an invalid <see cref="Unity.Collections.NativeArray{T}"/> passed to
     /// <see cref="PaddedHeightSampler"/>, which substitutes
     /// <see cref="GeoFoundry.Core.Ground.GroundHeightDefaults.FallbackHeightMeters"/> for every missing pixel.
+    /// A DEM tile is missing either because the source has no data for it (a regular result, see
+    /// <see cref="IDemTileSource"/>, not logged) or because its load failed (logged once by
+    /// <see cref="DemTileCache"/>).
     /// If only the central tile is missing, boundary normals still reflect the real slope towards the fallback
     /// height; if the central tile and all neighbors are missing, the whole grid is flat at the fallback height.
     /// <see cref="AcquireAsync"/> throws only on cancellation, Dispose or an unexpected internal error.
@@ -290,16 +293,15 @@ namespace GeoFoundry.Ground
         private Awaitable<DemTileHandle> AcquireDemOrNull(TileCoord demCoord, CancellationToken ct) =>
             demCoord.IsYInWorld ? _demCache.AcquireAsync(demCoord.WrapX(), ct) : null;
 
+        /// <summary>
+        /// Returns <c>null</c> for a failed or cancelled DEM load: the grid uses the fallback height there. Not logged
+        /// here: the cache has already logged the failure once per load, while this runs once per grid.
+        /// </summary>
         private static async Awaitable<DemTileHandle?> SafeAcquire(Awaitable<DemTileHandle> task)
         {
             if (task == null) return null;
             try { return await task; }
-            catch (OperationCanceledException) { return null; }
-            catch (Exception ex)
-            {
-                //Debug.LogError(ex);
-                return null;
-            }
+            catch (Exception) { return null; }
         }
 
         private static NativeArray<float> OrDefault(DemTileHandle? h) =>

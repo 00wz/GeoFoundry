@@ -112,9 +112,9 @@ namespace GeoFoundry.Tiles
         }
 
         /// <summary>
-        /// Raised when a tile load fails with an error (not a cancellation). Download errors arrive as
-        /// <see cref="TileDownloadException"/> with the HTTP code in <see cref="TileDownloadException.HttpStatus"/>
-        /// (e.g. 404 means there is no data for the tile); other errors arrive as is. Raised on the main thread after
+        /// Raised when a tile load fails with an error (not a cancellation). Source failures arrive as
+        /// <see cref="TileSourceException"/>, in the source's own subclass with the transport details (an HTTP source
+        /// throws <c>GeoFoundry.TileIO.Net.TileDownloadException</c> with the HTTP status); other errors arrive as is. Raised on the main thread after
         /// the error is logged. Notification only: the manager does not store the error, and the selector decides
         /// whether to retry the tile (<see cref="TileFrameInput.FailedSinceLastFrame"/>). Exceptions thrown by
         /// subscribers are logged and do not affect the manager.
@@ -350,10 +350,10 @@ namespace GeoFoundry.Tiles
             {
                 tileData.Dispose();
             }
-            catch (TileDownloadException ex)
+            catch (TileSourceException ex)
             {
                 tileData.Dispose();
-                Debug.LogWarning($"[GeoFoundry] Failed {coord}: HTTP {ex.HttpStatus} — {ex.Message}");
+                Debug.LogError($"[GeoFoundry] Failed {coord}: {ex.Message}");
                 _failedSinceLastFrame.Add(coord);
                 RaiseTileLoadFailed(coord, ex);
             }

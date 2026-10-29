@@ -1,12 +1,13 @@
 using System;
+using GeoFoundry.Core.Sources;
 
-namespace GeoFoundry.Core.Sources
+namespace GeoFoundry.TileIO.Net
 {
     /// <summary>
-    /// Final failure to download a tile, after retries are exhausted or because of a non-retryable HTTP status
-    /// (4xx).
+    /// Final failure to download a tile over HTTP, after retries are exhausted or because of a non-retryable HTTP
+    /// status (4xx), with the transport details. A <see cref="TileSourceException"/> to consumers of sources.
     /// </summary>
-    public sealed class TileDownloadException : Exception
+    public sealed class TileDownloadException : TileSourceException
     {
         /// <summary>Gets the URL of the failed request.</summary>
         public string Url { get; }

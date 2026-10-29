@@ -2,7 +2,6 @@ using System;
 using System.Collections;
 using System.Threading;
 using NUnit.Framework;
-using GeoFoundry.Core.Sources;
 using GeoFoundry.TileIO.Net;
 using Unity.Collections;
 using UnityEngine;
@@ -85,6 +84,26 @@ namespace GeoFoundry.Tests.PlayMode.TileIO
             var ex = Assert.Catch<TileDownloadException>(() => download.GetAwaiter().GetResult());
             Assert.That(ex.HttpStatus, Is.EqualTo(404));
             Assert.That(missing.RequestCount, Is.EqualTo(1), "4xx is not retried");
+        }
+
+        [UnityTest]
+        public IEnumerator NoDataStatus_ReturnsEmptyResult_WithoutExceptionOrRetry()
+        {
+            var noDataStatuses = new long[] { 204, 404 };
+            foreach (int status in noDataStatuses)
+            {
+                using var empty = new LoopbackHttpServer(Array.Empty<byte>(), statusCode: status);
+                using var downloader = new TileDownloader(maxConcurrent: 2, maxRetries: 3);
+
+                var texture = downloader.GetTextureAsync(empty.Url, nonReadable: false, noDataStatuses, CancellationToken.None);
+                var bytes = downloader.GetBytesAsync(empty.Url, Allocator.Persistent, noDataStatuses, CancellationToken.None);
+                yield return WaitFor(() => texture.GetAwaiter().IsCompleted && bytes.GetAwaiter().IsCompleted,
+                                     $"HTTP {status} responses");
+
+                Assert.That(texture.GetAwaiter().GetResult(), Is.Null, $"HTTP {status} texture is missing data");
+                Assert.That(bytes.GetAwaiter().GetResult().IsCreated, Is.False, $"HTTP {status} bytes are missing data");
+                Assert.That(empty.RequestCount, Is.EqualTo(2), "missing data is not retried");
+            }
         }
     }
 }

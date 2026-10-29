@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading;
 using NUnit.Framework;
 using GeoFoundry.Core.Coordinates;
+using GeoFoundry.Core.Ground;
 using GeoFoundry.Core.Sources;
 using GeoFoundry.Ground;
 using Unity.Collections;
@@ -14,7 +15,8 @@ namespace GeoFoundry.Tests.PlayMode.Ground
 {
     /// <summary>
     /// Which DEM tiles <see cref="DemGroundGridProvider"/> requests: at the world edges it skips nonexistent tiles
-    /// beyond the poles and wraps X across longitude; a grid load nobody waits for aborts its DEM loads.
+    /// beyond the poles and wraps X across longitude; a grid load nobody waits for aborts its DEM loads; DEM tiles
+    /// without data give the fallback height silently.
     /// </summary>
     public sealed class GroundGridProviderDemRequestTests
     {
@@ -69,6 +71,37 @@ namespace GeoFoundry.Tests.PlayMode.Ground
             Assert.That(dem.Cancelled, Is.EquivalentTo(dem.Pending.Keys),
                 "nobody waits for the grid load, so its DEM loads are aborted");
             Assert.That(_grids.MemoryBytes, Is.Zero);
+        }
+
+        /// <summary>
+        /// Missing data is a regular result of the source (see <see cref="IDemTileSource"/>): the grid is built at the
+        /// fallback height, and nothing is logged.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator Acquire_SourceHasNoData_FlatGridAtFallbackHeight_NothingLogged()
+        {
+            var logs = new List<string>();
+            Application.LogCallback onLog = (message, _, type) => logs.Add($"[{type}] {message}");
+            Application.logMessageReceived += onLog;
+            try
+            {
+                var dem = new DeferredDemSource();
+                _grids = new DemGroundGridProvider(dem, gridResolution: 4);
+
+                var acquire = _grids.AcquireAsync(new TileCoord(12, 2477, 1280), CancellationToken.None);
+                Assert.That(dem.Pending.Count, Is.EqualTo(9), "DEM requests for the tile and its 8 neighbors");
+                foreach (var completion in dem.Pending.Values) completion.SetResult(default);
+                yield return WaitFor(() => acquire.GetAwaiter().IsCompleted, "AcquireAsync completion");
+
+                using var handle = acquire.GetAwaiter().GetResult();
+                foreach (float height in handle.Grid.Heights)
+                    Assert.That(height, Is.EqualTo(GroundHeightDefaults.FallbackHeightMeters));
+            }
+            finally
+            {
+                Application.logMessageReceived -= onLog;
+            }
+            Assert.That(logs, Is.Empty, "missing data is not logged");
         }
 
         [Test]

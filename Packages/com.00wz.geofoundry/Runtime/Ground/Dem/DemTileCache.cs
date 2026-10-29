@@ -25,6 +25,10 @@ namespace GeoFoundry.Ground
     ///   finished load starts a new one.
     /// - <see cref="Dispose"/> aborts loads and frees unreferenced tiles; a tile that still has a handle is
     ///   freed by its last <see cref="DemTileHandle.Dispose"/>, so memory is never freed under a live handle.
+    /// - A tile the source has no data for (see <see cref="IDemTileSource"/>) is a successful load: its handle has
+    ///   heights that are not created, and nothing is logged.
+    /// - A failed load is logged once, here, rather than by each caller: one DEM tile is shared by up to 9 ground
+    ///   grids. Callers still get the error from <see cref="AcquireAsync"/>.
     ///
     /// Not thread-safe: all operations are expected on the main thread (Unity player loop).
     /// </summary>
@@ -80,9 +84,11 @@ namespace GeoFoundry.Ground
         /// Acquires a handle to a DEM tile and increments its ref count. Starts the load if the tile is not loaded
         /// yet, or waits (by polling) for a load already in flight. On cancellation of <paramref name="ct"/> or
         /// <see cref="Dispose"/>, the ref count increment is rolled back and
-        /// <see cref="OperationCanceledException"/> is thrown.
+        /// <see cref="OperationCanceledException"/> is thrown. If the source has no data for the tile, the handle's
+        /// <see cref="DemTileHandle.Heights"/> is not created.
         /// </summary>
-        /// <exception cref="InvalidOperationException">The load failed; the source error is the inner exception.</exception>
+        /// <exception cref="InvalidOperationException">The load failed (already logged); the source error is the
+        /// inner exception.</exception>
         public async Awaitable<DemTileHandle> AcquireAsync(TileCoord coord, CancellationToken ct)
         {
             ThrowIfDisposed();
@@ -161,12 +167,24 @@ namespace GeoFoundry.Ground
         {
             try
             {
+                // Heights that are not created mean the source has no data for the tile; they pass through as is.
                 var heights = await _source.GetHeightsAsync(coord, Allocator.Persistent, entry.LoadCts.Token);
                 entry.Heights = heights;
+            }
+            catch (Exception ex) when (ex is OperationCanceledException || entry.LoadCts.IsCancellationRequested)
+            {
+                // Nobody waits for the load anymore or the cache is disposed: not a load error worth logging.
+                entry.LoadError = ex;
+            }
+            catch (TileSourceException ex)
+            {
+                entry.LoadError = ex;
+                Debug.LogError($"[GeoFoundry] DEM tile {coord} failed: {ex.Message}");
             }
             catch (Exception ex)
             {
                 entry.LoadError = ex;
+                Debug.LogError($"[GeoFoundry] Unexpected error loading DEM tile {coord}: {ex}");
             }
             finally
             {

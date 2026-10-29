@@ -88,7 +88,11 @@ implementation.
 | Custom camera | `IMapCameraBinding` — the bootstrapper finds the component on the camera and binds it to the map | `GeoFoundry.Core` |
 
 Custom terrain elevation is plugged in through an `IDemTileSource` height source; the ground grid provider
-(`GroundGridProvider`) is an internal mechanism with two implementations and is not meant to be extended. For
+(`GroundGridProvider`) is an internal mechanism with two implementations and is not meant to be extended. A source
+reports a tile it has no data for (oceans, areas outside the coverage) by returning an array that is not created
+(`default`) rather than throwing: the ground uses the fallback height there, and nothing is logged. Exceptions are
+for real failures, which are logged once per DEM tile. `HttpDemTileSource` treats HTTP 204 and 404 as missing data
+(the `noDataStatuses` constructor parameter changes that). For
 building geometry in your own handlers there are the `AsyncGeometryWorker` (`GeoFoundry.Geometry`; including the
 ordered draw-list builders `BuildSurfaceMeshAsync(layer, SurfaceDrawItem[] …)` and `BuildLineMeshAsync`, and
 `GroundAnchors` for placing objects on the ground) and `MeshHierarchyInstance` (`GeoFoundry.Render.Layers`) helpers.
@@ -332,9 +336,11 @@ rather than every frame.
 ### Failed loads
 
 The `GeoFoundryBootstrapper.TileLoadFailed` event (or `TileLifecycleManager.TileLoadFailed` with a custom
-bootstrap) reports every failed tile load with the tile coordinates and the exception. A download error arrives as
-a `TileDownloadException`: its `HttpStatus` tells "no data" (404) apart from a server or network failure. A
-cancelled tile is not reported as a failure. The event is a notification only: what happens to the tile next is up
+bootstrap) reports every failed tile load with the tile coordinates and the exception. A source failure arrives as
+a `TileSourceException` (`GeoFoundry.Core.Sources`) in the source's own subclass: the HTTP sources throw
+`TileDownloadException` (`GeoFoundry.TileIO.Net`), whose `Url` and `HttpStatus` tell, for example, "no data" (404)
+apart from a server or network failure. Any other exception is a bug rather than a source failure. A cancelled tile
+is not reported as a failure. The event is a notification only: what happens to the tile next is up
 to the selector — `TileQuadtreeTraversal` shows a hole in its place and does not retry the load while the tile is
 needed for coverage; once the tile is no longer needed, the failure is forgotten and the next request for that tile
 loads it again.

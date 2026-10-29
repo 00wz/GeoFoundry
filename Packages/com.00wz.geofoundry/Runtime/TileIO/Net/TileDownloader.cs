@@ -1,6 +1,6 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
-using GeoFoundry.Core.Sources;
 using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -19,6 +19,10 @@ namespace GeoFoundry.TileIO.Net
     /// - Network errors and HTTP 5xx are retried with exponential backoff; 4xx (404, etc.) throws immediately.
     ///   A slot is held for one attempt, not the whole series: it is free during backoff and the retry queues
     ///   again, so a failing URL does not hold a slot idle, and a server that is down does not stall the queue.
+    /// - Missing data: what a status means is up to the caller, since the downloader is shared by sources with
+    ///   different servers. Statuses the caller passes as <c>noDataStatuses</c> (for example 204 and 404 of a DEM
+    ///   server that has no tiles over oceans) are not errors: the download returns an empty result without an
+    ///   exception and without retries.
     /// - Cancellation: the downloader owns its requests; both cancellation of the caller's token and
     ///   <see cref="Dispose"/> abort them. The wait wakes synchronously inside <c>Cancel()</c>/<c>Dispose()</c>:
     ///   the request is aborted and released right there, the slot is freed, and the result's Unity objects are
@@ -71,11 +75,21 @@ namespace GeoFoundry.TileIO.Net
         /// The caller owns the returned array and must dispose it.
         /// </summary>
         /// <exception cref="TileDownloadException">The request failed with a non-retryable error or ran out of retries.</exception>
-        public async Awaitable<NativeArray<byte>> GetBytesAsync(string url, Allocator allocator, CancellationToken ct)
+        public Awaitable<NativeArray<byte>> GetBytesAsync(string url, Allocator allocator, CancellationToken ct) =>
+            GetBytesAsync(url, allocator, noDataStatuses: null, ct);
+
+        /// <summary>
+        /// Downloads a URL as binary data, like <see cref="GetBytesAsync(string, Allocator, CancellationToken)"/>,
+        /// but a response with a status from <paramref name="noDataStatuses"/> means missing data (see the class
+        /// remarks) and returns an array that is not created.
+        /// </summary>
+        /// <exception cref="TileDownloadException">The request failed with a non-retryable error or ran out of retries.</exception>
+        public async Awaitable<NativeArray<byte>> GetBytesAsync(string url, Allocator allocator,
+                                                                IReadOnlyList<long> noDataStatuses, CancellationToken ct)
         {
             ThrowIfDisposed();
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _disposeCts.Token);
-            return await DownloadBytesWithRetryAsync(url, allocator, linked.Token);
+            return await DownloadBytesWithRetryAsync(url, allocator, noDataStatuses, linked.Token);
         }
 
         /// <summary>
@@ -84,11 +98,21 @@ namespace GeoFoundry.TileIO.Net
         /// The caller owns the returned texture and must destroy it.
         /// </summary>
         /// <exception cref="TileDownloadException">The request failed with a non-retryable error or ran out of retries.</exception>
-        public async Awaitable<Texture2D> GetTextureAsync(string url, bool nonReadable, CancellationToken ct)
+        public Awaitable<Texture2D> GetTextureAsync(string url, bool nonReadable, CancellationToken ct) =>
+            GetTextureAsync(url, nonReadable, noDataStatuses: null, ct);
+
+        /// <summary>
+        /// Downloads a URL as PNG/JPG, like <see cref="GetTextureAsync(string, bool, CancellationToken)"/>, but a
+        /// response with a status from <paramref name="noDataStatuses"/> means missing data (see the class remarks)
+        /// and returns <c>null</c>.
+        /// </summary>
+        /// <exception cref="TileDownloadException">The request failed with a non-retryable error or ran out of retries.</exception>
+        public async Awaitable<Texture2D> GetTextureAsync(string url, bool nonReadable,
+                                                          IReadOnlyList<long> noDataStatuses, CancellationToken ct)
         {
             ThrowIfDisposed();
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _disposeCts.Token);
-            return await DownloadTextureWithRetryAsync(url, nonReadable, linked.Token);
+            return await DownloadTextureWithRetryAsync(url, nonReadable, noDataStatuses, linked.Token);
         }
 
         /// <summary>
@@ -108,7 +132,9 @@ namespace GeoFoundry.TileIO.Net
 
         private void ReleaseSlot() => _activeCount--;
 
-        private async Awaitable<NativeArray<byte>> DownloadBytesWithRetryAsync(string url, Allocator allocator, CancellationToken ct)
+        private async Awaitable<NativeArray<byte>> DownloadBytesWithRetryAsync(string url, Allocator allocator,
+                                                                              IReadOnlyList<long> noDataStatuses,
+                                                                              CancellationToken ct)
         {
             int attempt = 0;
             while (true)
@@ -123,6 +149,12 @@ namespace GeoFoundry.TileIO.Net
 
                     await SendAsync(request, ct);
                     ct.ThrowIfCancellationRequested();
+
+                    if (IsNoData(request, noDataStatuses))
+                    {
+                        TotalRequestsCompleted++;
+                        return default;
+                    }
 
                     if (request.result == UnityWebRequest.Result.Success)
                     {
@@ -151,7 +183,9 @@ namespace GeoFoundry.TileIO.Net
             }
         }
 
-        private async Awaitable<Texture2D> DownloadTextureWithRetryAsync(string url, bool nonReadable, CancellationToken ct)
+        private async Awaitable<Texture2D> DownloadTextureWithRetryAsync(string url, bool nonReadable,
+                                                                         IReadOnlyList<long> noDataStatuses,
+                                                                         CancellationToken ct)
         {
             int attempt = 0;
             while (true)
@@ -167,6 +201,12 @@ namespace GeoFoundry.TileIO.Net
                     // A cancelled request may have finished downloading; do not create the texture then: the
                     // DownloadHandler frees it with the request (see SendAsync for why this matters).
                     ct.ThrowIfCancellationRequested();
+
+                    if (IsNoData(request, noDataStatuses))
+                    {
+                        TotalRequestsCompleted++;
+                        return null;
+                    }
 
                     if (request.result == UnityWebRequest.Result.Success)
                     {
@@ -215,6 +255,18 @@ namespace GeoFoundry.TileIO.Net
             }, (request, completion));
 
             await completion.Awaitable;
+        }
+
+        /// <summary>
+        /// Returns whether the server answered with a missing-data status of the caller. Checked by status rather
+        /// than <see cref="UnityWebRequest.result"/>: decoding the empty body of a 204 fails, which is not an error here.
+        /// </summary>
+        private static bool IsNoData(UnityWebRequest request, IReadOnlyList<long> noDataStatuses)
+        {
+            if (noDataStatuses == null || request.result == UnityWebRequest.Result.ConnectionError) return false;
+            for (int i = 0; i < noDataStatuses.Count; i++)
+                if (noDataStatuses[i] == request.responseCode) return true;
+            return false;
         }
 
         private bool ShouldRetry(UnityWebRequest request, int attempt)
