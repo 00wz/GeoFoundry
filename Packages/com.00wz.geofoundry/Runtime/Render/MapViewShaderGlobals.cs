@@ -11,8 +11,10 @@ namespace GeoFoundry.Render
     /// <summary>
     /// Publishes per-camera view parameters to the shaders before each camera renders:
     /// <c>_GeoFoundryMetersPerPixel</c>, the Web Mercator meters per screen pixel at the center of the view, with which
-    /// the <c>GeoFoundry/Line Lit</c> shader evaluates line widths (see <c>GeoFoundry.Geometry.LineWidth</c>), and
-    /// <c>_GeoFoundryDepthOcclusion</c>, 1 if the camera renders the URP depth texture, with which the
+    /// the <c>GeoFoundry/Line Lit</c> shader evaluates line widths (see <c>GeoFoundry.Geometry.LineWidth</c>),
+    /// <c>_GeoFoundryCameraPixelSize</c>, the camera position and the pixel size per meter of distance, with which the
+    /// <c>GeoFoundry/Building Lit</c> shader evaluates the zoom of each vertex for the building fade (see
+    /// <c>GeoFoundry.Geometry.BuildingFade</c>), and <c>_GeoFoundryDepthOcclusion</c>, 1 if the camera renders the URP depth texture, with which the
     /// <c>GeoFoundry/Label</c> shader hides labels whose anchor is occluded (without it the shader falls back to a
     /// per-pixel depth test).
     /// </summary>
@@ -42,7 +44,14 @@ namespace GeoFoundry.Render
         /// <summary>Name of the global shader property telling whether the camera depth texture is available.</summary>
         public const string DepthOcclusionProperty = "_GeoFoundryDepthOcclusion";
 
+        /// <summary>
+        /// Name of the global shader property with the camera position (xyz, world space) and the meters per pixel per
+        /// meter of distance (w; for an orthographic camera minus the constant meters per pixel; 0 when not set).
+        /// </summary>
+        public const string CameraPixelSizeProperty = "_GeoFoundryCameraPixelSize";
+
         private static readonly int MetersPerPixelId = Shader.PropertyToID(MetersPerPixelProperty);
+        private static readonly int CameraPixelSizeId = Shader.PropertyToID(CameraPixelSizeProperty);
         private static readonly int DepthOcclusionId = Shader.PropertyToID(DepthOcclusionProperty);
 
         private readonly IFloatingOriginController _origin;
@@ -74,6 +83,7 @@ namespace GeoFoundry.Render
             if (!_enabled) return;
             RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
             Shader.SetGlobalFloat(MetersPerPixelId, 0f);
+            Shader.SetGlobalVector(CameraPixelSizeId, Vector4.zero);
             Shader.SetGlobalFloat(DepthOcclusionId, 0f);
             _enabled = false;
         }
@@ -81,6 +91,9 @@ namespace GeoFoundry.Render
         private void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
         {
             Shader.SetGlobalFloat(MetersPerPixelId, ComputeMetersPerPixel(camera));
+            Vector3 position = camera.transform.position;
+            Shader.SetGlobalVector(CameraPixelSizeId, new Vector4(position.x, position.y, position.z,
+                ComputePixelSizePerMeter(camera.orthographic, camera.fieldOfView, camera.orthographicSize, camera.pixelHeight)));
             Shader.SetGlobalFloat(DepthOcclusionId, HasDepthTexture(camera) ? 1f : 0f);
         }
 
@@ -108,6 +121,20 @@ namespace GeoFoundry.Render
 
             return ComputeMetersPerPixel(position.y - groundHeight, t.forward, camera.orthographic,
                 camera.fieldOfView, camera.orthographicSize, camera.pixelHeight);
+        }
+
+        /// <summary>
+        /// Returns the meters per screen pixel per meter of distance from a perspective camera
+        /// (<c>2 · tan(fov / 2) / pixelHeight</c>, the pixel size the tile selection uses for a tile's screen size), or,
+        /// for an orthographic camera, minus its constant meters per pixel (<c>w</c> of
+        /// <see cref="CameraPixelSizeProperty"/>).
+        /// </summary>
+        public static float ComputePixelSizePerMeter(bool orthographic, float fieldOfViewDegrees,
+            float orthographicSize, int pixelHeight)
+        {
+            float pixels = math.max(1, pixelHeight);
+            if (orthographic) return -2f * math.max(orthographicSize, 1e-6f) / pixels;
+            return 2f * math.tan(math.radians(fieldOfViewDegrees) * 0.5f) / pixels;
         }
 
         /// <summary>

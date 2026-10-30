@@ -9,6 +9,7 @@ using GeoFoundry.Ground;
 using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.TestTools;
 
 namespace GeoFoundry.Tests.PlayMode.Geometry
@@ -91,6 +92,52 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             }
             finally
             {
+                hidden.Dispose();
+                topMeters.Dispose();
+                bottomMeters.Dispose();
+            }
+        });
+
+        /// <summary>
+        /// A <see cref="BuildingFade"/> adds the fade channels (stream 3: Color, TexCoord3, TexCoord4) and raises the
+        /// bounds to the fade's roof height (a 2 m building starts at the 5 m of the lower zoom); without it the mesh
+        /// keeps the plain layout.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator BuildBuildingTerrainMeshAsync_WithFade_AddsFadeChannelsAndRaisesBounds() => Run(async ct =>
+        {
+            using var tile = MakeTile(MvtGeomType.Polygon, SquareA, SquareB);
+            using var ground = new FlatGroundGridProvider();
+            var layer = tile.GetLayer(0);
+            var grid = GroundTestUtils.FlatGrid(ground, Coord);
+
+            var hidden = new NativeArray<bool>(new[] { false, false }, Allocator.Persistent);
+            var topMeters = new NativeArray<float>(new[] { 2f, 2f }, Allocator.Persistent);
+            var bottomMeters = new NativeArray<float>(new[] { 0f, 0f }, Allocator.Persistent);
+            var fade = new BuildingFade { StartZoom = 14f, Zooms = 1f, TopMeters = 5f, Color = new Color32(1, 2, 3, 255) };
+            Mesh faded = null, plain = null;
+            try
+            {
+                faded = await AsyncGeometryWorker.BuildBuildingTerrainMeshAsync(
+                    layer, hidden, topMeters, bottomMeters, default(NativeArray<Color32>), grid, Coord, Pivot, ct, fade);
+                plain = await AsyncGeometryWorker.BuildBuildingTerrainMeshAsync(
+                    layer, hidden, topMeters, bottomMeters, default(NativeArray<Color32>), grid, Coord, Pivot, ct);
+
+                Assert.That(faded.vertexCount, Is.EqualTo(plain.vertexCount));
+                Assert.That(faded.HasVertexAttribute(VertexAttribute.TexCoord3), Is.True);
+                Assert.That(faded.GetVertexAttributeFormat(VertexAttribute.TexCoord4), Is.EqualTo(VertexAttributeFormat.Float16));
+                Assert.That(faded.GetVertexAttributeStream(VertexAttribute.Color), Is.EqualTo(3));
+                Assert.That(faded.GetVertexAttributeStream(VertexAttribute.TexCoord4), Is.EqualTo(3));
+                Assert.That(faded.colors32[0], Is.EqualTo(new Color32(255, 255, 255, 255)), "feature color kept");
+                Assert.That(plain.HasVertexAttribute(VertexAttribute.TexCoord4), Is.False);
+
+                Assert.That(plain.bounds.max.y, Is.EqualTo(2f).Within(1e-3f));
+                Assert.That(faded.bounds.max.y, Is.GreaterThanOrEqualTo(5f), "bounds cover the roof at the start of the fade");
+            }
+            finally
+            {
+                if (faded != null) Object.DestroyImmediate(faded);
+                if (plain != null) Object.DestroyImmediate(plain);
                 hidden.Dispose();
                 topMeters.Dispose();
                 bottomMeters.Dispose();

@@ -16,6 +16,12 @@ namespace GeoFoundry.OpenMapTiles
     /// a per-feature constant. This keeps buildings made of several features (<c>building</c> + <c>building:part</c>)
     /// together on slopes: OpenMapTiles offers no way to group the features of one building, so instead of guessing a
     /// shared height all features follow the same deterministic terrain grid and meet at shared boundaries.
+    /// <para>
+    /// The schema sends merged blocks without heights or colours at zoom 13 and individual buildings with them from
+    /// zoom 14. With <c>Fade In Detail</c> the meshes carry the look of the blocks (the default height and color) and
+    /// the <c>GeoFoundry/Building Lit</c> shader fades the heights and colours in from it, starting when the zoom 14
+    /// tiles appear (see <see cref="BuildingFade"/>), so the tiles do not change their look at once.
+    /// </para>
     /// </remarks>
     [CreateAssetMenu(menuName = "GeoFoundry/Layers/OpenMapTiles/Building", fileName = "OmtBuilding")]
     public sealed class OmtBuildingHandler : OmtLayerHandler
@@ -42,6 +48,21 @@ namespace GeoFoundry.OpenMapTiles
         [Tooltip("Shadow casting of the building meshes.")]
         [SerializeField] private bool _castShadows = true;
 
+        [Tooltip("Fades heights and colours in from the look of the lower-zoom blocks (Default Height, Default Color) " +
+                 "as the camera approaches, starting when the tiles of Detail Zoom appear, so the tiles do not change " +
+                 "their look at once. Needs GeoFoundry/Building Lit.")]
+        [SerializeField] private bool _fadeInDetail = true;
+
+        [Tooltip("Tile zoom from which the source sends individual buildings with heights and colours (14 in OpenMapTiles).")]
+        [SerializeField, Range(0, 22)] private int _detailZoom = 14;
+
+        [Tooltip("Length of the fade in zooms.")]
+        [SerializeField, Range(0.1f, 3f)] private float _detailFadeZooms = 1f;
+
+        [Tooltip("The maximum screen size of a tile, which gives the zoom at which the tiles of Detail Zoom appear. " +
+                 "Without it 1024 pixels are assumed.")]
+        [SerializeField] private OmtTileScreenSize _tileScreenSize;
+
         public override string LayerName => "building";
 
         protected override async Awaitable BuildAsync(LayerLoadContext ctx, OmtTileOutput output)
@@ -64,7 +85,7 @@ namespace GeoFoundry.OpenMapTiles
             {
                 var mesh = await AsyncGeometryWorker.BuildBuildingTerrainMeshAsync(
                     ctx.Layer, props.Value.Hidden, props.Value.TopMeters, props.Value.BottomMeters, props.Value.Colors,
-                    ctx.Grids.Center, ctx.TileCoord, ctx.LocalFrame, ctx.Ct);
+                    ctx.Grids.Center, ctx.TileCoord, ctx.LocalFrame, ctx.Ct, CreateFade(options));
                 if (mesh == null) return;
                 mesh.name = $"Buildings_{ctx.TileCoord}";
                 output.Add(mesh, _material, _castShadows);
@@ -73,6 +94,23 @@ namespace GeoFoundry.OpenMapTiles
             {
                 props.Value.Dispose();
             }
+        }
+
+        /// <summary>
+        /// Returns the look of the blocks without heights and colours (the defaults, as computed by
+        /// <see cref="BuildingPropertiesJob"/>), from which the shader fades the detailed buildings in.
+        /// </summary>
+        private BuildingFade CreateFade(BuildingPropertyOptions options)
+        {
+            if (!_fadeInDetail) return default;
+            return new BuildingFade
+            {
+                StartZoom = OmtZoom.TileShownFromZoom(_detailZoom, OmtTileScreenSize.PixelsOf(_tileScreenSize)),
+                Zooms = _detailFadeZooms,
+                TopMeters = Mathf.Max(options.DefaultHeight * options.HeightScale, options.MinHeight),
+                BottomMeters = 0f,
+                Color = options.DefaultColor,
+            };
         }
 
 #if UNITY_EDITOR

@@ -63,6 +63,14 @@ namespace GeoFoundry.Geometry
         /// <summary>See <see cref="SurfaceBuildJob.EmitGlobalIndices"/>.</summary>
         public bool EmitGlobalIndices;
 
+        /// <summary>
+        /// The look at the start of the zoom fade; when <see cref="BuildingFade.Enabled"/>, every vertex also gets a
+        /// <see cref="FadeVertices"/> entry: roof vertices and wall tops rise from <see cref="BuildingFade.TopMeters"/>
+        /// to the feature's top, floor vertices and wall bottoms from <see cref="BuildingFade.BottomMeters"/> to its
+        /// bottom.
+        /// </summary>
+        public BuildingFade Fade;
+
         public MercatorPivot LocalFrame;
 
         public NativeList<float3> Positions;
@@ -70,6 +78,8 @@ namespace GeoFoundry.Geometry
         public NativeList<float2> Uvs;
         /// <summary>Per-vertex output parallel to <see cref="Positions"/>; see <see cref="FeatureColors"/>.</summary>
         public NativeList<Color32> Colors;
+        /// <summary>Per-vertex output parallel to <see cref="Positions"/> if <see cref="Fade"/> is enabled, else untouched.</summary>
+        public NativeList<BuildingFadeVertex> FadeVertices;
         public NativeList<int> Triangles;
         public NativeList<MeshRange> Ranges;
         /// <summary>Source feature index (into the Feature* arrays) of each output MeshRange.</summary>
@@ -194,6 +204,7 @@ namespace GeoFoundry.Geometry
                 Normals.Add(projNorm[k]);
                 Uvs.Add(projUv[k] * uvFactor);
                 Colors.Add(color);
+                AddFade(color, top - Fade.TopMeters);
             }
             for (int k = 0; k < projPos.Length; k++) Triangles.Add(roofLocalBase + k);
 
@@ -207,6 +218,7 @@ namespace GeoFoundry.Geometry
                     Normals.Add(-projNorm[k]);
                     Uvs.Add(projUv[k] * uvFactor);
                     Colors.Add(color);
+                    AddFade(color, bottom - Fade.BottomMeters);
                 }
                 for (int k = 0; k < projPos.Length; k += 3)
                 {
@@ -265,12 +277,25 @@ namespace GeoFoundry.Geometry
                     uCursor += segLen;
 
                     Colors.Add(color); Colors.Add(color); Colors.Add(color); Colors.Add(color);
+                    float bottomDelta = bottom - Fade.BottomMeters, topDelta = top - Fade.TopMeters;
+                    AddFade(color, bottomDelta); AddFade(color, bottomDelta); AddFade(color, topDelta); AddFade(color, topDelta);
 
                     // CW viewed from outside.
                     Triangles.Add(baseV + 0); Triangles.Add(baseV + 1); Triangles.Add(baseV + 2);
                     Triangles.Add(baseV + 0); Triangles.Add(baseV + 2); Triangles.Add(baseV + 3);
                 }
             }
+        }
+
+        private void AddFade(Color32 color, float heightDelta)
+        {
+            if (!Fade.Enabled) return;
+            FadeVertices.Add(new BuildingFadeVertex
+            {
+                Color = color,
+                FadeColor = Fade.Color,
+                Fade = new half4((half)heightDelta, (half)Fade.StartZoom, (half)Fade.Zooms, half.zero),
+            });
         }
 
         private static float2 ToUv(double2 m, double4 bounds, double tileW, double tileH) =>

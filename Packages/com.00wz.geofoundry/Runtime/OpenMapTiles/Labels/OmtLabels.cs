@@ -168,7 +168,7 @@ namespace GeoFoundry.OpenMapTiles
                 else icons = emptyIcons = new NativeArray<OmtIconInfo>(0, Allocator.Persistent);
 
                 int z = ctx.TileCoord.Z;
-                int2 tiers = OmtZoom.LabelTierRange(settings.TileScreenSizePixels);
+                int2 tiers = OmtZoom.LabelTierRange(OmtTileScreenSize.PixelsOf(settings.TileScreenSize));
                 var layout = new OmtLabelLayoutJob
                 {
                     Requests = requests,

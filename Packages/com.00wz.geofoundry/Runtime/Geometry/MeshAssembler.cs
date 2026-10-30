@@ -19,7 +19,9 @@ namespace GeoFoundry.Geometry
     /// GPU unpacks SNorm on vertex fetch); TexCoord0 Float32×2 (stream 2); optional Color UNorm8×4 (stream 3);
     /// for line meshes (single-mesh assembly only) stream 2 instead holds the <see cref="LineVertex"/> attributes,
     /// TexCoord0..2 Float32×4 interleaved, so that the mesh stays within the 4 vertex streams allowed on every
-    /// platform (WebGL included).
+    /// platform (WebGL included); for building meshes with a <see cref="BuildingFade"/> (single-mesh assembly only)
+    /// stream 3 holds the <see cref="BuildingFadeVertex"/> attributes, Color and TexCoord3 UNorm8×4 and TexCoord4
+    /// Float16×4 interleaved.
     /// Indices are UInt16 if the mesh fits in <see cref="MaxUInt16Vertices"/>, otherwise UInt32.
     ///
     /// Conversion (normal packing, int → ushort) runs ONLY in Burst jobs: an element-wise loop over a NativeArray
@@ -167,6 +169,7 @@ namespace GeoFoundry.Geometry
             [ReadOnly] public NativeArray<float2> SrcUvs;
             [ReadOnly] public NativeArray<Color32> SrcColors;
             [ReadOnly] public NativeArray<LineVertex> SrcLineVertices;
+            [ReadOnly] public NativeArray<BuildingFadeVertex> SrcBuildingVertices;
             [ReadOnly] public NativeArray<int> SrcTriangles;
 
             // MeshData.GetVertexData<T>(stream) for DIFFERENT streams of one MeshData returns NativeArray views that
@@ -176,7 +179,10 @@ namespace GeoFoundry.Geometry
             [WriteOnly, NativeDisableContainerSafetyRestriction] public NativeArray<uint> DstNormals;
             /// <summary>TexCoord0 stream of non-line meshes; a zero-length array when <see cref="DstLineVertices"/> is used.</summary>
             [WriteOnly, NativeDisableContainerSafetyRestriction] public NativeArray<float2> DstUvs;
+            /// <summary>Color stream of meshes without <see cref="DstBuildingVertices"/>; a zero-length array otherwise.</summary>
             [WriteOnly, NativeDisableContainerSafetyRestriction] public NativeArray<Color32> DstColors;
+            /// <summary>Building fade stream (Color, TexCoord3, TexCoord4); a zero-length array for other meshes.</summary>
+            [WriteOnly, NativeDisableContainerSafetyRestriction] public NativeArray<BuildingFadeVertex> DstBuildingVertices;
             /// <summary>Line attribute stream (TexCoord0..2); a zero-length array for non-line meshes.</summary>
             [WriteOnly, NativeDisableContainerSafetyRestriction] public NativeArray<LineVertex> DstLineVertices;
             [NativeDisableContainerSafetyRestriction] public NativeArray<byte> DstIndexBytes;
@@ -192,7 +198,10 @@ namespace GeoFoundry.Geometry
                 {
                     DstUvs.CopyFrom(SrcUvs);
                 }
-                DstColors.CopyFrom(SrcColors);
+                if (DstBuildingVertices.Length > 0)
+                    DstBuildingVertices.CopyFrom(SrcBuildingVertices);
+                else
+                    DstColors.CopyFrom(SrcColors);
                 WriteIndices(SrcTriangles, DstIndexBytes, Use16BitIndices);
             }
         }
@@ -217,18 +226,22 @@ namespace GeoFoundry.Geometry
         ///
         /// <paramref name="lineVertices"/> replace <paramref name="uvs"/> as stream 2 only if they have one entry per
         /// position (line meshes); otherwise (surfaces and buildings) stream 2 is TexCoord0 Float32×2.
+        /// <paramref name="buildingVertices"/> replace <paramref name="colors"/> as stream 3 only if they have one entry
+        /// per position (buildings with a <see cref="BuildingFade"/>).
         /// <paramref name="boundsPadding"/> widens the bounds horizontally (X/Z) for geometry resized by the shader.
         /// </summary>
         internal static async Awaitable<Mesh> BuildSingleMeshAsync(
             NativeList<float3> positions, NativeList<float3> normals, NativeList<float2> uvs,
             NativeList<Color32> colors, NativeList<int> triangles, string name, CancellationToken ct,
-            NativeList<LineVertex> lineVertices = default, float boundsPadding = 0f)
+            NativeList<LineVertex> lineVertices = default, float boundsPadding = 0f,
+            NativeList<BuildingFadeVertex> buildingVertices = default)
         {
             int vertCount = positions.Length;
             int triCount = triangles.Length;
             if (vertCount == 0 || triCount == 0) return null;
 
             bool isLine = lineVertices.IsCreated && lineVertices.Length == vertCount;
+            bool isBuilding = !isLine && buildingVertices.IsCreated && buildingVertices.Length == vertCount;
 
             var dataArray = Mesh.AllocateWritableMeshData(1);
             var data = dataArray[0];
@@ -243,6 +256,16 @@ namespace GeoFoundry.Geometry
                     new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.Float32, 4, 2),
                     new VertexAttributeDescriptor(VertexAttribute.TexCoord2, VertexAttributeFormat.Float32, 4, 2));
             }
+            else if (isBuilding)
+            {
+                data.SetVertexBufferParams(vertCount,
+                    new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3, 0),
+                    NormalDescriptor,
+                    new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4, 3),
+                    new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2, 2),
+                    new VertexAttributeDescriptor(VertexAttribute.TexCoord3, VertexAttributeFormat.UNorm8, 4, 3),
+                    new VertexAttributeDescriptor(VertexAttribute.TexCoord4, VertexAttributeFormat.Float16, 4, 3));
+            }
             else
             {
                 data.SetVertexBufferParams(vertCount,
@@ -255,6 +278,9 @@ namespace GeoFoundry.Geometry
             var emptySrcLines = isLine ? default : new NativeArray<LineVertex>(0, Allocator.Persistent);
             var emptyDstLines = isLine ? default : new NativeArray<LineVertex>(0, Allocator.Persistent);
             var emptyUvs = isLine ? new NativeArray<float2>(0, Allocator.Persistent) : default;
+            var emptySrcBuildings = isBuilding ? default : new NativeArray<BuildingFadeVertex>(0, Allocator.Persistent);
+            var emptyDstBuildings = isBuilding ? default : new NativeArray<BuildingFadeVertex>(0, Allocator.Persistent);
+            var emptyColors = isBuilding ? new NativeArray<Color32>(0, Allocator.Persistent) : default;
             var indexFormat = ChooseIndexFormat(vertCount);
             data.SetIndexBufferParams(triCount, indexFormat);
 
@@ -265,12 +291,14 @@ namespace GeoFoundry.Geometry
                 SrcUvs = uvs.AsArray(),
                 SrcColors = colors.AsArray(),
                 SrcLineVertices = isLine ? lineVertices.AsArray() : emptySrcLines,
+                SrcBuildingVertices = isBuilding ? buildingVertices.AsArray() : emptySrcBuildings,
                 SrcTriangles = triangles.AsArray(),
                 DstPositions = data.GetVertexData<float3>(0),
                 DstNormals = data.GetVertexData<uint>(1),
                 DstUvs = isLine ? emptyUvs : data.GetVertexData<float2>(2),
-                DstColors = data.GetVertexData<Color32>(3),
+                DstColors = isBuilding ? emptyColors : data.GetVertexData<Color32>(3),
                 DstLineVertices = isLine ? data.GetVertexData<LineVertex>(2) : emptyDstLines,
+                DstBuildingVertices = isBuilding ? data.GetVertexData<BuildingFadeVertex>(3) : emptyDstBuildings,
                 DstIndexBytes = data.GetIndexData<byte>(),
                 Use16BitIndices = indexFormat == IndexFormat.UInt16,
             };
@@ -280,6 +308,9 @@ namespace GeoFoundry.Geometry
             if (emptySrcLines.IsCreated) emptySrcLines.Dispose();
             if (emptyDstLines.IsCreated) emptyDstLines.Dispose();
             if (emptyUvs.IsCreated) emptyUvs.Dispose();
+            if (emptySrcBuildings.IsCreated) emptySrcBuildings.Dispose();
+            if (emptyDstBuildings.IsCreated) emptyDstBuildings.Dispose();
+            if (emptyColors.IsCreated) emptyColors.Dispose();
             if (!completed)
             {
                 dataArray.Dispose();

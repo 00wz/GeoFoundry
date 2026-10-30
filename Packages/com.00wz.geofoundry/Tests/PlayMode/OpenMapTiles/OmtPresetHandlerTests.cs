@@ -50,9 +50,26 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
         {
             var settings = AssetDatabase.LoadAssetAtPath<OmtTextSettings>(Presets + "OmtTextSettings.asset");
             Assert.That(settings, Is.Not.Null);
-            Assert.That(settings.TileScreenSizePixels, Is.GreaterThanOrEqualTo(1f));
-            var tiers = OmtZoom.LabelTierRange(settings.TileScreenSizePixels);
+            Assert.That(settings.TileScreenSize, Is.Not.Null);
+            Assert.That(settings.TileScreenSize.MaxPixels, Is.GreaterThanOrEqualTo(1f));
+            var tiers = OmtZoom.LabelTierRange(settings.TileScreenSize.MaxPixels);
             Assert.That(tiers.x, Is.LessThanOrEqualTo(tiers.y));
+        }
+
+        [Test]
+        public void Presets_ShareOneTileScreenSize()
+        {
+            var settings = AssetDatabase.LoadAssetAtPath<OmtTextSettings>(Presets + "OmtTextSettings.asset");
+            var building = AssetDatabase.LoadAssetAtPath<OmtBuildingHandler>(Presets + "OmtBuilding.asset");
+            var shared = new SerializedObject(building).FindProperty("_tileScreenSize").objectReferenceValue;
+            Assert.That(shared, Is.Not.Null);
+            Assert.That(shared, Is.SameAs(settings.TileScreenSize), "labels and buildings must use the same value");
+        }
+
+        [Test]
+        public void TileScreenSize_WithoutAConfig_Assumes1024()
+        {
+            Assert.That(OmtTileScreenSize.PixelsOf(null), Is.EqualTo(1024f));
         }
 
         [UnityTest]

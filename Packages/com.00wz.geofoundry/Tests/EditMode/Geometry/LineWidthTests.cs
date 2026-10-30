@@ -93,5 +93,16 @@ namespace GeoFoundry.Tests.EditMode.Geometry
             Assert.That(below, Is.EqualTo(2f * math.tan(math.radians(30f)) / 1080f).Within(1e-6f));
             Assert.That(MapViewShaderGlobals.ComputeMetersPerPixel(0f, default, true, 0f, 540f, 1080), Is.EqualTo(1f));
         }
+
+        [Test]
+        public void PixelSizePerMeter_IsTheSizeTheTileSelectionUses_AndNegativeForOrthographic()
+        {
+            float perMeter = MapViewShaderGlobals.ComputePixelSizePerMeter(false, 60f, 0f, 1080);
+            Assert.That(perMeter * 1000f, Is.EqualTo(
+                MapViewShaderGlobals.ComputeMetersPerPixel(1000f, new float3(0f, -1f, 0f), false, 60f, 0f, 1080)).Within(1e-5f),
+                "top down, the distance is the altitude");
+            Assert.That(MapViewShaderGlobals.ComputePixelSizePerMeter(true, 0f, 540f, 1080), Is.EqualTo(-1f),
+                "orthographic: minus the constant meters per pixel");
+        }
     }
 }

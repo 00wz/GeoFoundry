@@ -2,7 +2,7 @@
 // with the same per-vertex color addition as GeoFoundryLitForwardPass.hlsl. The deferred path is not used
 // on WebGL, but it is forked alongside ForwardLit so forward and deferred behave the same on other platforms.
 // See GeoFoundryLitForwardPass.hlsl for the list of changes (search for "GEOFOUNDRY VERTEX COLOR" and
-// "GEOFOUNDRY LINE"). With _GEOFOUNDRY_GBUFFER_BLEND (search for "GEOFOUNDRY GBUFFER BLEND") semi-transparent
+// "GEOFOUNDRY LINE", "GEOFOUNDRY BUILDING FADE"). With _GEOFOUNDRY_GBUFFER_BLEND (search for "GEOFOUNDRY GBUFFER BLEND") semi-transparent
 // surfaces blend into the GBuffer like URP's GBuffer decals.
 #ifndef GEOFOUNDRY_LIT_GBUFFER_PASS_INCLUDED
 #define GEOFOUNDRY_LIT_GBUFFER_PASS_INCLUDED
@@ -11,6 +11,9 @@
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/GBufferOutput.hlsl"
 #ifdef GEOFOUNDRY_LINE
     #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLineWidth.hlsl" // GEOFOUNDRY LINE
+#endif
+#ifdef GEOFOUNDRY_BUILDING_FADE
+    #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryBuildingFade.hlsl" // GEOFOUNDRY BUILDING FADE
 #endif
 #if defined(LOD_FADE_CROSSFADE)
     #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/LODCrossFade.hlsl"
@@ -47,6 +50,10 @@ struct Attributes
     float2 dynamicLightmapUV  : TEXCOORD2;
 #endif
     float4 color        : COLOR; // GEOFOUNDRY VERTEX COLOR
+#ifdef GEOFOUNDRY_BUILDING_FADE
+    float4 fadeColor    : TEXCOORD3; // GEOFOUNDRY BUILDING FADE: the color at the start of the fade
+    float4 buildingFade : TEXCOORD4; // GEOFOUNDRY BUILDING FADE: (height delta, start zoom, zooms, 0)
+#endif
     UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
@@ -173,6 +180,11 @@ Varyings LitGBufferPassVertex(Attributes input)
     float2 lineDash = GeoFoundryWidenLine(positionOS, input.normalOS, input.texcoord, input.staticLightmapUV,
         input.dynamicLightmapUV);
     VertexPositionInputs vertexInput = GetVertexPositionInputs(positionOS);
+#elif defined(GEOFOUNDRY_BUILDING_FADE)
+    // GEOFOUNDRY BUILDING FADE: the heights at the camera's zoom.
+    float3 positionOS = input.positionOS.xyz;
+    float buildingFade = GeoFoundryApplyBuildingFade(positionOS, input.buildingFade);
+    VertexPositionInputs vertexInput = GetVertexPositionInputs(positionOS);
 #else
     VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
 #endif
@@ -222,6 +234,9 @@ Varyings LitGBufferPassVertex(Attributes input)
     #endif
 
     output.vertexColor = input.color; // GEOFOUNDRY VERTEX COLOR
+#ifdef GEOFOUNDRY_BUILDING_FADE
+    output.vertexColor = lerp(input.fadeColor, input.color, buildingFade); // GEOFOUNDRY BUILDING FADE
+#endif
 #ifdef GEOFOUNDRY_LINE
     output.dash = float3(input.texcoord.y, lineDash); // GEOFOUNDRY LINE
 #endif

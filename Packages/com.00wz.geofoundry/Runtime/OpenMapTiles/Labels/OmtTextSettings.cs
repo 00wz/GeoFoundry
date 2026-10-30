@@ -68,9 +68,9 @@ namespace GeoFoundry.OpenMapTiles
         [Tooltip("Padding around labels in collision tests, in screen pixels.")]
         [SerializeField, Range(0, 16)] private float _collisionPadding = 2f;
 
-        [Tooltip("Must equal GeoFoundryConfig → Lod → Max Tile Screen Size Pixels: a tile is shown while its screen " +
-                 "size is between half of this value and this value, and its labels are decluttered for that range.")]
-        [SerializeField, Min(1f)] private float _tileScreenSizePixels = 1500f;
+        [Tooltip("The maximum screen size of a tile: labels are decluttered for the range of sizes at which a tile is " +
+                 "shown. Without it 1024 pixels are assumed.")]
+        [SerializeField] private OmtTileScreenSize _tileScreenSize;
 
         private OmtGlyphCache _glyphs;
         private readonly List<Material> _textMaterials = new List<Material>();
@@ -86,17 +86,13 @@ namespace GeoFoundry.OpenMapTiles
         public float CollisionPadding => _collisionPadding;
 
         /// <summary>
-        /// Gets or sets the maximum screen size of a tile in pixels, which sets the label declutter tiers (see
-        /// <see cref="OmtZoom.LabelTierRange"/>). Handlers cannot query the tile selection, so it must be kept equal to
-        /// <c>GeoFoundryConfig.Lod.MaxTileScreenSizePixels</c>: with a lower value tiles show fewer labels than would
-        /// fit; with a value more than about twice as high, labels fade in only shortly before their tile is replaced
-        /// (they flicker as the camera approaches).
+        /// Gets the maximum screen size of a tile, which sets the label declutter tiers (see
+        /// <see cref="OmtZoom.LabelTierRange"/>). With a value lower than
+        /// <c>GeoFoundryConfig.Lod.MaxTileScreenSizePixels</c> tiles show fewer labels than would fit; with a value more
+        /// than about twice as high, labels fade in only shortly before their tile is replaced (they flicker as the
+        /// camera approaches).
         /// </summary>
-        public float TileScreenSizePixels
-        {
-            get => _tileScreenSizePixels;
-            set => _tileScreenSizePixels = Mathf.Max(1f, value);
-        }
+        public OmtTileScreenSize TileScreenSize => _tileScreenSize;
 
         /// <summary>Gets whether text can be rendered (a regular font and a text material are assigned).</summary>
         public bool CanRenderText => _regularFont != null && _textMaterial != null;

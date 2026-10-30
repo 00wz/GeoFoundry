@@ -236,19 +236,31 @@ namespace GeoFoundry.Geometry
 
         /// <summary>
         /// Builds all Polygon geometry of a tile's building layer as a single <see cref="Mesh"/>; an alternative to
-        /// <see cref="BuildBuildingTerrainMeshesAsync"/>. See <see cref="BuildSurfaceMeshAsync"/>.
+        /// <see cref="BuildBuildingTerrainMeshesAsync"/>. See <see cref="BuildSurfaceMeshAsync"/>. With an enabled
+        /// <paramref name="fade"/> the mesh carries the look at the start of the zoom fade for the
+        /// <c>GeoFoundry/Building Lit</c> shader (see <see cref="BuildingFade"/>), and its bounds are raised to the
+        /// fade's roof height, which may be above a feature's own top.
         /// </summary>
         public static async Awaitable<Mesh> BuildBuildingTerrainMeshAsync(
             NativeMvtLayer layer,
             NativeArray<bool> hidden, NativeArray<float> topMeters, NativeArray<float> bottomMeters,
             NativeArray<Color32> featureColors,
-            GroundGrid grid, TileCoord coord, MercatorPivot localFrame, CancellationToken ct)
+            GroundGrid grid, TileCoord coord, MercatorPivot localFrame, CancellationToken ct,
+            BuildingFade fade = default)
         {
             JobInputs.RequireGrid(grid, nameof(grid));
             var buffers = GeometryBuffers.Allocate(layer.FeatureCount);
             var job = CreateBuildingTerrainJob(layer, hidden, topMeters, bottomMeters, featureColors, grid, coord, localFrame, buffers);
             job.EmitGlobalIndices = true;
-            return await RunSingleMeshAsync(job.Schedule(), buffers, $"Buildings_{coord}", ct);
+            job.Fade = fade;
+            var mesh = await RunSingleMeshAsync(job.Schedule(), buffers, $"Buildings_{coord}", ct);
+            if (mesh != null && fade.Enabled && fade.TopMeters > 0f)
+            {
+                var bounds = mesh.bounds;
+                bounds.Encapsulate(bounds.max + new Vector3(0f, fade.TopMeters, 0f));
+                mesh.bounds = bounds;
+            }
+            return mesh;
         }
 
         // ---- Terrain -----------------------------------------------------------
@@ -385,6 +397,7 @@ namespace GeoFoundry.Geometry
                 Normals = buffers.Normals,
                 Uvs = buffers.Uvs,
                 Colors = buffers.Colors,
+                FadeVertices = buffers.BuildingVertices,
                 Triangles = buffers.Triangles,
                 Ranges = buffers.Ranges,
                 RangeFeatureIndices = buffers.RangeFeatureIndices,
@@ -435,7 +448,7 @@ namespace GeoFoundry.Geometry
             {
                 return await MeshAssembler.BuildSingleMeshAsync(
                     buffers.Positions, buffers.Normals, buffers.Uvs, buffers.Colors, buffers.Triangles, name, ct,
-                    buffers.LineVertices, boundsPadding);
+                    buffers.LineVertices, boundsPadding, buffers.BuildingVertices);
             }
             finally
             {

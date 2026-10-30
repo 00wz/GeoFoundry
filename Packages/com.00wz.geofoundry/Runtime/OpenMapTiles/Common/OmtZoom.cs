@@ -34,6 +34,14 @@ namespace GeoFoundry.OpenMapTiles
         }
 
         /// <summary>
+        /// Returns the display zoom from which the tile selection shows tiles of zoom <paramref name="tileZoom"/>: a
+        /// tile is shown while it is between <c>tileScreenSizePixels / 2</c> and <c>tileScreenSizePixels</c> pixels
+        /// wide, that is from <c>tileZoom + log2(tileScreenSizePixels / 1024)</c>.
+        /// </summary>
+        public static float TileShownFromZoom(int tileZoom, float tileScreenSizePixels) =>
+            tileZoom + math.log2(math.max(1f, tileScreenSizePixels) / (2f * (float)TilePixels));
+
+        /// <summary>
         /// Returns the factor converting real (ground) meters to Mercator meters at the tile's latitude:
         /// <c>1 / cos(latitude)</c>. Real-world sizes (road widths) are multiplied by it so that they match the
         /// Mercator-scaled footprints around them.

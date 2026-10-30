@@ -6,6 +6,7 @@ using GeoFoundry.Core.Handlers;
 using GeoFoundry.OpenMapTiles;
 using NUnit.Framework;
 using Unity.Collections;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace GeoFoundry.Tests.EditMode.OpenMapTiles
@@ -108,6 +109,26 @@ namespace GeoFoundry.Tests.EditMode.OpenMapTiles
             var tiers = OmtZoom.LabelTierRange(size);
             Assert.That(tiers.x, Is.EqualTo(first));
             Assert.That(tiers.y, Is.EqualTo(last));
+        }
+
+        /// <summary>
+        /// The building fade starts where the tile selection first shows a tile of the detail zoom: at the pixel size
+        /// at which a zoom 14 tile is half the maximum tile screen size wide, the factor is 0, one fade length later 1.
+        /// </summary>
+        [TestCase(1000f)]
+        [TestCase(1500f)]
+        public void BuildingFade_StartsWhenTheTilesOfTheDetailZoomAppear(float tileScreenSize)
+        {
+            float start = OmtZoom.TileShownFromZoom(14, tileScreenSize);
+            Assert.That(start, Is.EqualTo(14f + math.log2(tileScreenSize / 1024f)).Within(1e-5f));
+
+            var fade = new GeoFoundry.Geometry.BuildingFade { StartZoom = start, Zooms = 1f };
+            float tileMeters = (float)(OmtZoom.WorldSizeMeters / (1 << 14));
+            float shownAt = tileMeters / (tileScreenSize / 2f);
+            Assert.That(fade.FactorAt(shownAt), Is.EqualTo(0f).Within(1e-3f), "no detail when the tile appears");
+            Assert.That(fade.FactorAt(shownAt / 2f), Is.EqualTo(1f).Within(1e-3f), "full detail one zoom later");
+            Assert.That(fade.FactorAt(shownAt / math.SQRT2), Is.EqualTo(0.5f).Within(1e-3f));
+            Assert.That(default(GeoFoundry.Geometry.BuildingFade).FactorAt(shownAt), Is.EqualTo(1f), "disabled: full detail");
         }
 
         [TestCase("12", 12.0)]

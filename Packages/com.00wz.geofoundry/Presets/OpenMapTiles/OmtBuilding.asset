@@ -11,6 +11,17 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 68a3c81ed7164716aae801f3a8fe6392, type: 3}
   m_Name: OmtBuilding
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   _minZoom: 13
+  _maxZoom: 22
   _material: {fileID: 2100000, guid: c7768023b2454ff895a282902f766571, type: 2}
+  _defaultColor: {r: 0.8506, g: 0.81592, b: 0.7894, a: 1}
+  _defaultHeight: 5
+  _heightScale: 1
+  _minHeight: 1
+  _useColourAttribute: 1
+  _castShadows: 1
+  _fadeInDetail: 1
+  _detailZoom: 14
+  _detailFadeZooms: 1
+  _tileScreenSize: {fileID: 11400000, guid: 5eefed3913df4cabb09ad338b69e3156, type: 2}
