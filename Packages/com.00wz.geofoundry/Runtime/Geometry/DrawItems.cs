@@ -41,27 +41,23 @@ namespace GeoFoundry.Geometry
     /// <summary>
     /// One entry of an ordered draw list for
     /// <see cref="AsyncGeometryWorker.BuildLineMeshAsync"/>: which feature to emit as a ribbon, its width, vertex
-    /// color, dash pattern and minimum zoom. Items are emitted in array order (the draw order inside the mesh), so a
-    /// casing pass followed by a fill pass is simply the same features listed twice with different widths and colors.
+    /// color and dash pattern. Items are emitted in array order (the draw order inside the mesh), so a casing pass
+    /// followed by a fill pass is simply the same features listed twice with different widths and colors.
     /// </summary>
-    /// <remarks>
-    /// Width, dashes and the minimum zoom are evaluated by the <c>GeoFoundry/Line Lit</c> shader at the camera's pixel
-    /// size (see <see cref="LineWidth"/>); the item's values are written to TexCoord0..2 of every vertex.
-    /// </remarks>
     public struct LineDrawItem
     {
         /// <summary>Index of the feature within the layer.</summary>
         public int FeatureIndex;
 
-        /// <summary>Ribbon width; an item whose width is ≤ 0 at the build pixel size is skipped.</summary>
-        public LineWidth Width;
+        /// <summary>Ribbon width in meters; ≤ 0 skips the item.</summary>
+        public float WidthMeters;
 
         /// <summary>Vertex color of the ribbon.</summary>
         public Color32 Color;
 
         /// <summary>
-        /// Dash pattern in multiples of the core width (<see cref="LineWidth.Core"/>): <c>x</c> = dash length,
-        /// <c>y</c> = gap length; <c>(0, 0)</c> is a solid line. The shader cuts dashes using the distance along the
+        /// Dash pattern in meters along the line: <c>x</c> = dash length, <c>y</c> = gap length; <c>(0, 0)</c> is a
+        /// solid line. Written to TexCoord1 of every vertex; the line shader cuts dashes using the distance along the
         /// line stored in TexCoord0.y.
         /// </summary>
         public float2 Dash;
@@ -69,21 +65,13 @@ namespace GeoFoundry.Geometry
         /// <summary>Drawing options.</summary>
         public LineDrawFlags Flags;
 
-        /// <summary>
-        /// Camera zoom below which the line is hidden; it fades in (grows from zero width) over the half zoom below.
-        /// 0 shows it at every zoom.
-        /// </summary>
-        public float MinZoom;
-
-        public LineDrawItem(int featureIndex, LineWidth width, Color32 color, float2 dash = default,
-            LineDrawFlags flags = LineDrawFlags.None, float minZoom = 0f)
+        public LineDrawItem(int featureIndex, float widthMeters, Color32 color, float2 dash = default, LineDrawFlags flags = LineDrawFlags.None)
         {
             FeatureIndex = featureIndex;
-            Width = width;
+            WidthMeters = widthMeters;
             Color = color;
             Dash = dash;
             Flags = flags;
-            MinZoom = minZoom;
         }
     }
 }

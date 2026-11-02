@@ -16,7 +16,7 @@ namespace GeoFoundry.Geometry
     /// lines in the same ring storage (<c>NativeMvtTile.Rings</c>/<c>RingPoints</c>) one to one (each MoveTo in the
     /// wire format starts a new line), so every ring of a feature is simply a separate line.
     /// </summary>
-    internal static class NativeMvtLineHelpers
+    public static class NativeMvtLineHelpers
     {
         /// <summary>
         /// Projects the rings of ONE feature (<paramref name="featureRingRange"/> is (start, count) in

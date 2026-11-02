@@ -95,7 +95,7 @@ namespace GeoFoundry.Tests.EditMode.OpenMapTiles
             Assert.That(OmtZoom.MetersPerPixel(0), Is.EqualTo(78271.517f).Within(0.01f));
             Assert.That(OmtZoom.MetersPerPixel(14), Is.EqualTo(4.7773f).Within(1e-3f));
             var width = OmtZoom.LineWidth(10f, 2f, 1.5f);
-            Assert.That(width, Is.EqualTo(new GeoFoundry.Geometry.LineWidth(15f, 2f)), "real meters scaled to Mercator");
+            Assert.That(width, Is.EqualTo(new OmtLineWidth(15f, 2f)), "real meters scaled to Mercator");
             Assert.That(width.Evaluate(4f), Is.EqualTo(15f), "the real width up close");
             Assert.That(width.Evaluate(10f), Is.EqualTo(20f), "at least 2 px from afar");
         }
@@ -122,13 +122,13 @@ namespace GeoFoundry.Tests.EditMode.OpenMapTiles
             float start = OmtZoom.TileShownFromZoom(14, tileScreenSize);
             Assert.That(start, Is.EqualTo(14f + math.log2(tileScreenSize / 1024f)).Within(1e-5f));
 
-            var fade = new GeoFoundry.Geometry.BuildingFade { StartZoom = start, Zooms = 1f };
+            var fade = new OmtBuildingFade { StartZoom = start, Zooms = 1f };
             float tileMeters = (float)(OmtZoom.WorldSizeMeters / (1 << 14));
             float shownAt = tileMeters / (tileScreenSize / 2f);
             Assert.That(fade.FactorAt(shownAt), Is.EqualTo(0f).Within(1e-3f), "no detail when the tile appears");
             Assert.That(fade.FactorAt(shownAt / 2f), Is.EqualTo(1f).Within(1e-3f), "full detail one zoom later");
             Assert.That(fade.FactorAt(shownAt / math.SQRT2), Is.EqualTo(0.5f).Within(1e-3f));
-            Assert.That(default(GeoFoundry.Geometry.BuildingFade).FactorAt(shownAt), Is.EqualTo(1f), "disabled: full detail");
+            Assert.That(default(OmtBuildingFade).FactorAt(shownAt), Is.EqualTo(1f), "disabled: full detail");
         }
 
         [TestCase("12", 12.0)]
@@ -222,6 +222,15 @@ namespace GeoFoundry.Tests.EditMode.OpenMapTiles
             Assert.That(OmtStyleDefaults.LandcoverFills().Count, Is.GreaterThan(30));
             Assert.That(OmtLabelDefaults.Poi().Count, Is.GreaterThan(40));
             Assert.That(OmtLabelDefaults.Place().Any(r => r.Class == "city" && r.Subclass == "2"), Is.True);
+        }
+
+        [Test]
+        public void TransportationDefaults_HaveAGroundWidthForTheRealWorldMode()
+        {
+            foreach (var r in OmtStyleDefaults.TransportationLines())
+                if (r.Visible)
+                    Assert.That(r.RealWidthMeters > 0f ? r.RealWidthMeters : r.WidthMeters, Is.GreaterThan(0f),
+                        $"{r.Class}/{r.Subclass}");
         }
 
         // ---- schema zooms -----------------------------------------------------
@@ -689,6 +698,7 @@ namespace GeoFoundry.Tests.EditMode.OpenMapTiles
                 ["OmtLanduseOutline"] = OmtDrawOrder.LanduseOutline,
                 ["OmtTransportationAreas"] = OmtDrawOrder.TransportationAreas,
                 ["OmtTransportation"] = OmtDrawOrder.Transportation,
+                ["OmtTransportationRealWidth"] = OmtDrawOrder.Transportation,
                 ["OmtWaterwayBridges"] = OmtDrawOrder.WaterwayBridges, ["OmtMountainLines"] = OmtDrawOrder.MountainLines,
                 ["OmtBoundary"] = OmtDrawOrder.Boundary, ["OmtBuilding"] = OmtDrawOrder.Building,
             };

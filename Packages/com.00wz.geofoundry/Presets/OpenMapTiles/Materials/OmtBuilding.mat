@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: OmtBuilding
-  m_Shader: {fileID: 4800000, guid: 66e6eae61b278a748af6a79d7c587e28, type: 3}
+  m_Shader: {fileID: 4800000, guid: ece731cef86f4b73bd8bc840315fdb4f, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []

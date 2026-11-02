@@ -28,11 +28,13 @@ Initial release.
   `GeoFoundry/Label` shader (whole labels fade when their anchor is occluded, tested against the camera depth
   texture as in MapLibre, never cut by the ground or buildings; a per-pixel depth-buffer mode without the depth
   texture).
-- `GeoFoundry/Line Lit` shader (Surface Lit with dashes and line widths evaluated per frame at the camera's pixel
-  size, as in MapLibre: `LineWidth`, `MapViewShaderGlobals`; Surface Lit and Line Lit blend by the vertex alpha for
+- `GeoFoundry/Line Lit` shader (Surface Lit with dashes; Surface Lit and Line Lit blend by the vertex alpha for
   semi-transparent style colors, in deferred like GBuffer decals, Surface Lit per material through "Deferred Blend")
-  and ordered draw-list geometry:
-  `AsyncGeometryWorker.BuildLineMeshAsync`, a draw-item overload of `BuildSurfaceMeshAsync`, `GroundAnchors`.
+  and ordered draw-list geometry: `AsyncGeometryWorker.BuildLineMeshAsync` (ribbons of their real width in meters), a
+  draw-item overload of `BuildSurfaceMeshAsync`, `GroundAnchors`.
+- OpenMapTiles lines with widths evaluated per frame at the camera's pixel size, as in MapLibre (`OmtLineWidth`,
+  `GeoFoundry/OMT Line Lit`); the transportation lines by default at their real ground width only
+  (`OmtLineWidthMode.RealWorld`, `OmtLineRule.RealWidthMeters` for lines the style sizes in pixels).
 - Floating origin based on a double-precision Mercator pivot.
 - `MapCameraRig` camera: orbit and free modes, desktop and touch input. Requires the Input System package;
   without it the camera assembly is skipped from compilation and the rest of the package still works.
@@ -43,4 +45,6 @@ Initial release.
 - Web builds: Burst jobs on WASM threads, a build validator, a menu for allowing HTTP.
 - The defaults of the OpenMapTiles handlers audited against the 3.16 schema and the style
   (`Documentation~/omt-schema-audit.md`).
-- Extruded buildings fade their heights and colors in from the zoom 13 blocks (`BuildingFade`, `GeoFoundry/Building Lit`).
+- OpenMapTiles buildings fade their heights and colors in from the zoom 13 blocks (`GeoFoundry/OMT Building Lit`).
+- Public geometry building blocks for custom handlers' jobs: `NativeGroundProjector`, `NativeTriangleMath`,
+  `NativeMvtPolygonHelpers`, `NativeMvtLineHelpers`, `NativePolygonTriangulator`, `MeshPacking`.

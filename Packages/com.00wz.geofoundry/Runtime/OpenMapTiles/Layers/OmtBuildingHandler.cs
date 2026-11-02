@@ -1,5 +1,4 @@
 using GeoFoundry.Core.Handlers;
-using GeoFoundry.Geometry;
 using UnityEngine;
 
 namespace GeoFoundry.OpenMapTiles
@@ -9,7 +8,7 @@ namespace GeoFoundry.OpenMapTiles
     /// <c>render_height</c>/<c>render_min_height</c> (heights above the terrain), <c>colour</c> (vertex tint, hex) and
     /// <c>hide_3d</c> (building outlines whose parts are mapped separately are not extruded), in jobs through
     /// <see cref="BuildingPropertiesJob"/>, and builds one terrain-conforming mesh with
-    /// <see cref="AsyncGeometryWorker.BuildBuildingTerrainMeshAsync"/>.
+    /// <see cref="OmtBuildingMesh"/>.
     /// </summary>
     /// <remarks>
     /// Roofs, walls and floors follow the terrain: every point samples the terrain height under itself instead of
@@ -19,14 +18,14 @@ namespace GeoFoundry.OpenMapTiles
     /// <para>
     /// The schema sends merged blocks without heights or colours at zoom 13 and individual buildings with them from
     /// zoom 14. With <c>Fade In Detail</c> the meshes carry the look of the blocks (the default height and color) and
-    /// the <c>GeoFoundry/Building Lit</c> shader fades the heights and colours in from it, starting when the zoom 14
-    /// tiles appear (see <see cref="BuildingFade"/>), so the tiles do not change their look at once.
+    /// the <c>GeoFoundry/OMT Building Lit</c> shader fades the heights and colours in from it, starting when the zoom 14
+    /// tiles appear (see <see cref="OmtBuildingFade"/>), so the tiles do not change their look at once.
     /// </para>
     /// </remarks>
     [CreateAssetMenu(menuName = "GeoFoundry/Layers/OpenMapTiles/Building", fileName = "OmtBuilding")]
     public sealed class OmtBuildingHandler : OmtLayerHandler
     {
-        [Tooltip("Building material (GeoFoundry/Building Lit, multiplies albedo by the vertex color). " +
+        [Tooltip("Building material (GeoFoundry/OMT Building Lit, multiplies albedo by the vertex color). " +
                  "Recommended Sorting Priority: 0.")]
         [SerializeField] private Material _material;
 
@@ -50,7 +49,7 @@ namespace GeoFoundry.OpenMapTiles
 
         [Tooltip("Fades heights and colours in from the look of the lower-zoom blocks (Default Height, Default Color) " +
                  "as the camera approaches, starting when the tiles of Detail Zoom appear, so the tiles do not change " +
-                 "their look at once. Needs GeoFoundry/Building Lit.")]
+                 "their look at once. Needs GeoFoundry/OMT Building Lit.")]
         [SerializeField] private bool _fadeInDetail = true;
 
         [Tooltip("Tile zoom from which the source sends individual buildings with heights and colours (14 in OpenMapTiles).")]
@@ -83,11 +82,10 @@ namespace GeoFoundry.OpenMapTiles
 
             try
             {
-                var mesh = await AsyncGeometryWorker.BuildBuildingTerrainMeshAsync(
+                var mesh = await OmtBuildingMesh.BuildAsync(
                     ctx.Layer, props.Value.Hidden, props.Value.TopMeters, props.Value.BottomMeters, props.Value.Colors,
-                    ctx.Grids.Center, ctx.TileCoord, ctx.LocalFrame, ctx.Ct, CreateFade(options));
+                    ctx.Grids.Center, ctx.TileCoord, ctx.LocalFrame, CreateFade(options), ctx.Ct);
                 if (mesh == null) return;
-                mesh.name = $"Buildings_{ctx.TileCoord}";
                 output.Add(mesh, _material, _castShadows);
             }
             finally
@@ -100,10 +98,10 @@ namespace GeoFoundry.OpenMapTiles
         /// Returns the look of the blocks without heights and colours (the defaults, as computed by
         /// <see cref="BuildingPropertiesJob"/>), from which the shader fades the detailed buildings in.
         /// </summary>
-        private BuildingFade CreateFade(BuildingPropertyOptions options)
+        private OmtBuildingFade CreateFade(BuildingPropertyOptions options)
         {
             if (!_fadeInDetail) return default;
-            return new BuildingFade
+            return new OmtBuildingFade
             {
                 StartZoom = OmtZoom.TileShownFromZoom(_detailZoom, OmtTileScreenSize.PixelsOf(_tileScreenSize)),
                 Zooms = _detailFadeZooms,

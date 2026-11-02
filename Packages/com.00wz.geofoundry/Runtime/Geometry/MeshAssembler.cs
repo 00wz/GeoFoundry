@@ -17,12 +17,9 @@ namespace GeoFoundry.Geometry
     /// Layout: Position Float32×3 (stream 0); Normal SNorm8×4 (stream 1; 4 bytes instead of 12 for Float32×3, w is
     /// unused and only pads the attribute to 4 bytes; angular error ≤ ~0.5°; shaders read NORMAL as float3 and the
     /// GPU unpacks SNorm on vertex fetch); TexCoord0 Float32×2 (stream 2); optional Color UNorm8×4 (stream 3);
-    /// for line meshes (single-mesh assembly only) stream 2 instead holds the <see cref="LineVertex"/> attributes,
-    /// TexCoord0..2 Float32×4 interleaved, so that the mesh stays within the 4 vertex streams allowed on every
-    /// platform (WebGL included); for building meshes with a <see cref="BuildingFade"/> (single-mesh assembly only)
-    /// stream 3 holds the <see cref="BuildingFadeVertex"/> attributes, Color and TexCoord3 UNorm8×4 and TexCoord4
-    /// Float16×4 interleaved.
-    /// Indices are UInt16 if the mesh fits in <see cref="MaxUInt16Vertices"/>, otherwise UInt32.
+    /// optional TexCoord1 Float32×2 (single-mesh assembly only, e.g. line dash patterns), interleaved with TexCoord0 in
+    /// stream 2 so that the mesh stays within the 4 vertex streams allowed on every platform (WebGL included).
+    /// Indices are UInt16 if the mesh fits in <see cref="MeshPacking.MaxUInt16Vertices"/>, otherwise UInt32.
     ///
     /// Conversion (normal packing, int → ushort) runs ONLY in Burst jobs: an element-wise loop over a NativeArray
     /// on the main thread is very slow (an atomic safety handle check on every access; profiled at up to
@@ -30,44 +27,6 @@ namespace GeoFoundry.Geometry
     /// </summary>
     internal static class MeshAssembler
     {
-        /// <summary>
-        /// 65535 rather than 65536: WebGL2 always enables fixed-index primitive restart, so index <c>0xFFFF</c> in a
-        /// UInt16 buffer breaks the primitive; the maximum usable index is 65534.
-        /// </summary>
-        private const int MaxUInt16Vertices = 65535;
-
-        private static readonly VertexAttributeDescriptor NormalDescriptor =
-            new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.SNorm8, 4, 1);
-
-        private static IndexFormat ChooseIndexFormat(int vertexCount) =>
-            vertexCount <= MaxUInt16Vertices ? IndexFormat.UInt16 : IndexFormat.UInt32;
-
-        private static void PackNormals(NativeArray<float3> src, NativeArray<uint> dst)
-        {
-            for (int i = 0; i < src.Length; i++)
-            {
-                int3 q = (int3)math.round(math.clamp(src[i], -1f, 1f) * 127f);
-                dst[i] = (uint)(q.x & 0xFF) | ((uint)(q.y & 0xFF) << 8) | ((uint)(q.z & 0xFF) << 16);
-            }
-        }
-
-        /// <summary>
-        /// Writes indices into a raw (byte) index buffer: one job field serves both formats, with no dummy array for
-        /// the unused one (the Job System requires all container fields to be constructed).
-        /// </summary>
-        private static void WriteIndices(NativeArray<int> src, NativeArray<byte> dstBytes, bool use16)
-        {
-            if (use16)
-            {
-                var dst = dstBytes.Reinterpret<ushort>(1);
-                for (int i = 0; i < src.Length; i++) dst[i] = (ushort)src[i];
-            }
-            else
-            {
-                dstBytes.Reinterpret<int>(1).CopyFrom(src);
-            }
-        }
-
         /// <summary>Normals and indices of one range for <see cref="BuildMeshes"/> (invoked via <c>Run()</c>).</summary>
         [BurstCompile]
         private struct PackNormalsAndIndicesJob : IJob
@@ -80,15 +39,15 @@ namespace GeoFoundry.Geometry
 
             public void Execute()
             {
-                PackNormals(SrcNormals, DstNormals);
-                WriteIndices(SrcTriangles, DstIndexBytes, Use16BitIndices);
+                MeshPacking.PackNormals(SrcNormals, DstNormals);
+                MeshPacking.WriteIndices(SrcTriangles, DstIndexBytes, Use16BitIndices);
             }
         }
 
         /// <summary>
         /// Builds one independent <see cref="Mesh"/> per <paramref name="ranges"/>[i] from the shared layer buffers
         /// through the Advanced Mesh API. Positions, UVs and colors are bulk-copied with <c>CopyFrom</c>; normals
-        /// (SNorm8×4) and indices (UInt16 or UInt32, see <see cref="ChooseIndexFormat"/>) go through the Burst
+        /// (SNorm8×4) and indices (UInt16 or UInt32, see <see cref="MeshPacking.ChooseIndexFormat"/>) go through the Burst
         /// <see cref="PackNormalsAndIndicesJob"/>.<c>Run()</c>, with no element-wise loops on the main thread.
         /// Colors are written only if <paramref name="colors"/> has one entry per position. Must be called on the
         /// main thread.
@@ -114,7 +73,7 @@ namespace GeoFoundry.Geometry
                 {
                     data.SetVertexBufferParams(range.VertexCount,
                         new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3, 0),
-                        NormalDescriptor,
+                        MeshPacking.NormalDescriptor(),
                         new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2, 2),
                         new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4, 3));
                 }
@@ -122,11 +81,11 @@ namespace GeoFoundry.Geometry
                 {
                     data.SetVertexBufferParams(range.VertexCount,
                         new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3, 0),
-                        NormalDescriptor,
+                        MeshPacking.NormalDescriptor(),
                         new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2, 2));
                 }
 
-                var indexFormat = ChooseIndexFormat(range.VertexCount);
+                var indexFormat = MeshPacking.ChooseIndexFormat(range.VertexCount);
                 data.SetIndexBufferParams(range.TriCount, indexFormat);
 
                 data.GetVertexData<float3>(0).CopyFrom(positions.GetSubArray(range.VertexStart, range.VertexCount));
@@ -168,8 +127,7 @@ namespace GeoFoundry.Geometry
             [ReadOnly] public NativeArray<float3> SrcNormals;
             [ReadOnly] public NativeArray<float2> SrcUvs;
             [ReadOnly] public NativeArray<Color32> SrcColors;
-            [ReadOnly] public NativeArray<LineVertex> SrcLineVertices;
-            [ReadOnly] public NativeArray<BuildingFadeVertex> SrcBuildingVertices;
+            [ReadOnly] public NativeArray<float2> SrcUv1;
             [ReadOnly] public NativeArray<int> SrcTriangles;
 
             // MeshData.GetVertexData<T>(stream) for DIFFERENT streams of one MeshData returns NativeArray views that
@@ -177,32 +135,29 @@ namespace GeoFoundry.Geometry
             // distinct buffers. NativeDisableContainerSafetyRestriction disables that check, uniformly on all Dst*.
             [WriteOnly, NativeDisableContainerSafetyRestriction] public NativeArray<float3> DstPositions;
             [WriteOnly, NativeDisableContainerSafetyRestriction] public NativeArray<uint> DstNormals;
-            /// <summary>TexCoord0 stream of non-line meshes; a zero-length array when <see cref="DstLineVertices"/> is used.</summary>
+            /// <summary>TexCoord0 stream without TexCoord1; a zero-length array when <see cref="DstUv01"/> is used.</summary>
             [WriteOnly, NativeDisableContainerSafetyRestriction] public NativeArray<float2> DstUvs;
-            /// <summary>Color stream of meshes without <see cref="DstBuildingVertices"/>; a zero-length array otherwise.</summary>
             [WriteOnly, NativeDisableContainerSafetyRestriction] public NativeArray<Color32> DstColors;
-            /// <summary>Building fade stream (Color, TexCoord3, TexCoord4); a zero-length array for other meshes.</summary>
-            [WriteOnly, NativeDisableContainerSafetyRestriction] public NativeArray<BuildingFadeVertex> DstBuildingVertices;
-            /// <summary>Line attribute stream (TexCoord0..2); a zero-length array for non-line meshes.</summary>
-            [WriteOnly, NativeDisableContainerSafetyRestriction] public NativeArray<LineVertex> DstLineVertices;
+            /// <summary>Interleaved TexCoord0 + TexCoord1 stream (uv0.xy, uv1.xy); a zero-length array when the mesh has
+            /// no TexCoord1.</summary>
+            [WriteOnly, NativeDisableContainerSafetyRestriction] public NativeArray<float4> DstUv01;
             [NativeDisableContainerSafetyRestriction] public NativeArray<byte> DstIndexBytes;
             public bool Use16BitIndices;
 
             public void Execute()
             {
                 DstPositions.CopyFrom(SrcPositions);
-                PackNormals(SrcNormals, DstNormals);
-                if (DstLineVertices.Length > 0)
-                    DstLineVertices.CopyFrom(SrcLineVertices);
+                MeshPacking.PackNormals(SrcNormals, DstNormals);
+                if (DstUv01.Length > 0)
+                {
+                    for (int i = 0; i < DstUv01.Length; i++) DstUv01[i] = new float4(SrcUvs[i], SrcUv1[i]);
+                }
                 else
                 {
                     DstUvs.CopyFrom(SrcUvs);
                 }
-                if (DstBuildingVertices.Length > 0)
-                    DstBuildingVertices.CopyFrom(SrcBuildingVertices);
-                else
-                    DstColors.CopyFrom(SrcColors);
-                WriteIndices(SrcTriangles, DstIndexBytes, Use16BitIndices);
+                DstColors.CopyFrom(SrcColors);
+                MeshPacking.WriteIndices(SrcTriangles, DstIndexBytes, Use16BitIndices);
             }
         }
 
@@ -224,64 +179,45 @@ namespace GeoFoundry.Geometry
         /// exiting Play Mode a build finishes in Edit Mode, and the created mesh (and the handler's GameObject with
         /// it) would otherwise remain in the editor scene. Also returns <c>null</c> if the buffers are empty.
         ///
-        /// <paramref name="lineVertices"/> replace <paramref name="uvs"/> as stream 2 only if they have one entry per
-        /// position (line meshes); otherwise (surfaces and buildings) stream 2 is TexCoord0 Float32×2.
-        /// <paramref name="buildingVertices"/> replace <paramref name="colors"/> as stream 3 only if they have one entry
-        /// per position (buildings with a <see cref="BuildingFade"/>).
-        /// <paramref name="boundsPadding"/> widens the bounds horizontally (X/Z) for geometry resized by the shader.
+        /// <paramref name="uv1"/> is written as TexCoord1 only if it has one entry per position; otherwise (the
+        /// default for surfaces and buildings) the mesh has no TexCoord1.
         /// </summary>
         internal static async Awaitable<Mesh> BuildSingleMeshAsync(
             NativeList<float3> positions, NativeList<float3> normals, NativeList<float2> uvs,
             NativeList<Color32> colors, NativeList<int> triangles, string name, CancellationToken ct,
-            NativeList<LineVertex> lineVertices = default, float boundsPadding = 0f,
-            NativeList<BuildingFadeVertex> buildingVertices = default)
+            NativeList<float2> uv1 = default)
         {
             int vertCount = positions.Length;
             int triCount = triangles.Length;
             if (vertCount == 0 || triCount == 0) return null;
 
-            bool isLine = lineVertices.IsCreated && lineVertices.Length == vertCount;
-            bool isBuilding = !isLine && buildingVertices.IsCreated && buildingVertices.Length == vertCount;
+            bool hasUv1 = uv1.IsCreated && uv1.Length == vertCount;
 
             var dataArray = Mesh.AllocateWritableMeshData(1);
             var data = dataArray[0];
 
-            if (isLine)
+            if (hasUv1)
             {
                 data.SetVertexBufferParams(vertCount,
                     new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3, 0),
-                    NormalDescriptor,
-                    new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4, 3),
-                    new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 4, 2),
-                    new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.Float32, 4, 2),
-                    new VertexAttributeDescriptor(VertexAttribute.TexCoord2, VertexAttributeFormat.Float32, 4, 2));
-            }
-            else if (isBuilding)
-            {
-                data.SetVertexBufferParams(vertCount,
-                    new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3, 0),
-                    NormalDescriptor,
+                    MeshPacking.NormalDescriptor(),
                     new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4, 3),
                     new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2, 2),
-                    new VertexAttributeDescriptor(VertexAttribute.TexCoord3, VertexAttributeFormat.UNorm8, 4, 3),
-                    new VertexAttributeDescriptor(VertexAttribute.TexCoord4, VertexAttributeFormat.Float16, 4, 3));
+                    new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.Float32, 2, 2));
             }
             else
             {
                 data.SetVertexBufferParams(vertCount,
                     new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3, 0),
-                    NormalDescriptor,
+                    MeshPacking.NormalDescriptor(),
                     new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2, 2),
                     new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4, 3));
             }
             // Valid zero-length placeholders for the job fields of the unused layout.
-            var emptySrcLines = isLine ? default : new NativeArray<LineVertex>(0, Allocator.Persistent);
-            var emptyDstLines = isLine ? default : new NativeArray<LineVertex>(0, Allocator.Persistent);
-            var emptyUvs = isLine ? new NativeArray<float2>(0, Allocator.Persistent) : default;
-            var emptySrcBuildings = isBuilding ? default : new NativeArray<BuildingFadeVertex>(0, Allocator.Persistent);
-            var emptyDstBuildings = isBuilding ? default : new NativeArray<BuildingFadeVertex>(0, Allocator.Persistent);
-            var emptyColors = isBuilding ? new NativeArray<Color32>(0, Allocator.Persistent) : default;
-            var indexFormat = ChooseIndexFormat(vertCount);
+            var emptyUv1 = hasUv1 ? default : new NativeArray<float2>(0, Allocator.Persistent);
+            var emptyUv01 = hasUv1 ? default : new NativeArray<float4>(0, Allocator.Persistent);
+            var emptyUvs = hasUv1 ? new NativeArray<float2>(0, Allocator.Persistent) : default;
+            var indexFormat = MeshPacking.ChooseIndexFormat(vertCount);
             data.SetIndexBufferParams(triCount, indexFormat);
 
             var fillJob = new FillMeshDataJob
@@ -290,27 +226,22 @@ namespace GeoFoundry.Geometry
                 SrcNormals = normals.AsArray(),
                 SrcUvs = uvs.AsArray(),
                 SrcColors = colors.AsArray(),
-                SrcLineVertices = isLine ? lineVertices.AsArray() : emptySrcLines,
-                SrcBuildingVertices = isBuilding ? buildingVertices.AsArray() : emptySrcBuildings,
+                SrcUv1 = hasUv1 ? uv1.AsArray() : emptyUv1,
                 SrcTriangles = triangles.AsArray(),
                 DstPositions = data.GetVertexData<float3>(0),
                 DstNormals = data.GetVertexData<uint>(1),
-                DstUvs = isLine ? emptyUvs : data.GetVertexData<float2>(2),
-                DstColors = isBuilding ? emptyColors : data.GetVertexData<Color32>(3),
-                DstLineVertices = isLine ? data.GetVertexData<LineVertex>(2) : emptyDstLines,
-                DstBuildingVertices = isBuilding ? data.GetVertexData<BuildingFadeVertex>(3) : emptyDstBuildings,
+                DstUvs = hasUv1 ? emptyUvs : data.GetVertexData<float2>(2),
+                DstColors = data.GetVertexData<Color32>(3),
+                DstUv01 = hasUv1 ? data.GetVertexData<float4>(2) : emptyUv01,
                 DstIndexBytes = data.GetIndexData<byte>(),
                 Use16BitIndices = indexFormat == IndexFormat.UInt16,
             };
 
             JobHandle handle = fillJob.Schedule();
             bool completed = await handle.WaitNonBlockingAsync(ct);
-            if (emptySrcLines.IsCreated) emptySrcLines.Dispose();
-            if (emptyDstLines.IsCreated) emptyDstLines.Dispose();
+            if (emptyUv1.IsCreated) emptyUv1.Dispose();
+            if (emptyUv01.IsCreated) emptyUv01.Dispose();
             if (emptyUvs.IsCreated) emptyUvs.Dispose();
-            if (emptySrcBuildings.IsCreated) emptySrcBuildings.Dispose();
-            if (emptyDstBuildings.IsCreated) emptyDstBuildings.Dispose();
-            if (emptyColors.IsCreated) emptyColors.Dispose();
             if (!completed)
             {
                 dataArray.Dispose();
@@ -323,12 +254,6 @@ namespace GeoFoundry.Geometry
             var mesh = new Mesh { name = name };
             Mesh.ApplyAndDisposeWritableMeshData(dataArray, new[] { mesh });
             mesh.RecalculateBounds();
-            if (boundsPadding > 0f)
-            {
-                var bounds = mesh.bounds;
-                bounds.Expand(new Vector3(2f * boundsPadding, 0f, 2f * boundsPadding));
-                mesh.bounds = bounds;
-            }
             return mesh;
         }
     }

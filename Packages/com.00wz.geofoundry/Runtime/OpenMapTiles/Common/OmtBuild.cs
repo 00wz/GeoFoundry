@@ -77,8 +77,8 @@ namespace GeoFoundry.OpenMapTiles
         public static async Awaitable<(Mesh primary, Mesh secondary)> LinesAsync(
             LayerLoadContext ctx, IReadOnlyList<OmtLinePass> passes, string name)
         {
-            var primary = new NativeList<LineDrawItem>(64, Allocator.Persistent);
-            var secondary = new NativeList<LineDrawItem>(8, Allocator.Persistent);
+            var primary = new NativeList<OmtLineDrawItem>(64, Allocator.Persistent);
+            var secondary = new NativeList<OmtLineDrawItem>(8, Allocator.Persistent);
             try
             {
                 if (!await ScheduleLinePassesAsync(ctx, passes, primary, secondary)) return (null, null);
@@ -86,14 +86,14 @@ namespace GeoFoundry.OpenMapTiles
                 Mesh a = null, b = null;
                 if (primary.Length > 0)
                 {
-                    a = await AsyncGeometryWorker.BuildLineMeshAsync(
+                    a = await OmtLineMesh.BuildAsync(
                         ctx.Layer, primary.AsArray(), ctx.TileCoord, ctx.Grids.Center, ctx.LocalFrame,
                         OmtZoom.MetersPerPixel(ctx.TileCoord.Z), ctx.Ct);
                     if (a != null) a.name = $"{name}_{ctx.TileCoord}";
                 }
                 if (secondary.Length > 0 && !ctx.Ct.IsCancellationRequested)
                 {
-                    b = await AsyncGeometryWorker.BuildLineMeshAsync(
+                    b = await OmtLineMesh.BuildAsync(
                         ctx.Layer, secondary.AsArray(), ctx.TileCoord, ctx.Grids.Center, ctx.LocalFrame,
                         OmtZoom.MetersPerPixel(ctx.TileCoord.Z), ctx.Ct);
                     if (b != null) b.name = $"{name}Secondary_{ctx.TileCoord}";
@@ -113,7 +113,7 @@ namespace GeoFoundry.OpenMapTiles
         /// </summary>
         public static async Awaitable<bool> ScheduleLinePassesAsync(
             LayerLoadContext ctx, IReadOnlyList<OmtLinePass> passes,
-            NativeList<LineDrawItem> primary, NativeList<LineDrawItem> secondary)
+            NativeList<OmtLineDrawItem> primary, NativeList<OmtLineDrawItem> secondary)
         {
             var disposables = new List<System.IDisposable>();
             try

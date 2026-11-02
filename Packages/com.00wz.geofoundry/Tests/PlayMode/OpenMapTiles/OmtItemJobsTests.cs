@@ -276,7 +276,7 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
             };
 
             var nativeRules = OmtRules.ToNative(rules, Allocator.TempJob);
-            var output = new NativeList<LineDrawItem>(16, Allocator.TempJob);
+            var output = new NativeList<OmtLineDrawItem>(16, Allocator.TempJob);
             try
             {
                 var layer = tile.GetLayer(0);
@@ -340,7 +340,7 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
             };
 
             var nativeRules = OmtRules.ToNative(rules, Allocator.TempJob);
-            var output = new NativeList<LineDrawItem>(16, Allocator.TempJob);
+            var output = new NativeList<OmtLineDrawItem>(16, Allocator.TempJob);
             try
             {
                 var layer = tile.GetLayer(0);
@@ -361,13 +361,13 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
                     Output = output,
                 }.Run();
 
-                LineDrawItem Fill(int fi)
+                OmtLineDrawItem Fill(int fi)
                 {
                     foreach (var item in output)
                         if (item.FeatureIndex == fi && item.Width.ExtraMeters == 0f) return item;
                     throw new AssertionException($"no fill of feature {fi}");
                 }
-                LineDrawItem Casing(int fi)
+                OmtLineDrawItem Casing(int fi)
                 {
                     foreach (var item in output)
                         if (item.FeatureIndex == fi && item.Width.ExtraMeters > 0f) return item;
@@ -381,6 +381,56 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
                 Assert.That(Casing(3).Color, Is.EqualTo(OmtColor.ToVertex(trunkCasing)), "the rule's bridge casing");
                 Assert.That(Casing(4).Color, Is.EqualTo(black), "the handler's bridge casing");
                 Assert.That(Casing(5).Dash, Is.EqualTo(new float2(0.5f, 0.25f)), "dashed tunnel casing");
+            }
+            finally
+            {
+                nativeRules.Dispose();
+                output.Dispose();
+            }
+        }
+
+        [Test]
+        public void Transportation_RealWidths_UseTheRealWidthMeters_AndSkipPixelOnlyCasings()
+        {
+            using var tile = new OmtTestTile("transportation")
+                .Line(Segment, ("class", "path"))
+                .Line(Segment, ("class", "primary"))
+                .Line(Segment, ("class", "path"), ("brunnel", "bridge"))
+                .Build();
+            var rules = new List<OmtLineRule>
+            {
+                new OmtLineRule("path", "", Color.red, 0f, 1f, 1).WithRealWidth(2f).WithCasing(Color.white, 1f, 0f),
+                new OmtLineRule("primary", "", Color.yellow, 10f, 4f, 2).WithRealWidth(7f).WithCasing(Color.black, 0.5f, 1f),
+            };
+
+            var nativeRules = OmtRules.ToNative(rules, Allocator.TempJob);
+            var output = new NativeList<OmtLineDrawItem>(16, Allocator.TempJob);
+            try
+            {
+                var layer = tile.GetLayer(0);
+                new OmtTransportationItemsJob
+                {
+                    GeomTypes = layer.FeatureGeomTypesSlice,
+                    Props = OmtProps.From(layer),
+                    Rules = nativeRules,
+                    MercatorScale = 1f,
+                    BridgeCasing = new Color32(0, 0, 0, 255),
+                    RampWidth = 1f,
+                    MinorServiceWidth = 1f,
+                    RailServiceOpacity = 1f,
+                    RealWidths = true,
+                    Output = output,
+                }.Run();
+
+                var widths = new List<(int, float)>();
+                foreach (var item in output) widths.Add((item.FeatureIndex, item.Width.RealMeters));
+                Assert.That(widths, Is.EqualTo(new[]
+                {
+                    (1, 7f + 2f * 1f), // primary casing: the real core and the casing meters
+                    (0, 2f), (1, 7f),  // path without its pixel-only casing, primary
+                    (2, 2f + 2f * 1f), // bridge casing: 1 m per side
+                    (2, 2f),
+                }));
             }
             finally
             {
@@ -414,14 +464,14 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
             return items;
         }
 
-        private static (NativeList<LineDrawItem>, NativeList<LineDrawItem>) RunLines(
+        private static (NativeList<OmtLineDrawItem>, NativeList<OmtLineDrawItem>) RunLines(
             GeoFoundry.Core.Mvt.NativeMvtTile tile, OmtLinePass pass, List<OmtModifier> mods)
         {
             var layer = tile.GetLayer(0);
             var nativeRules = OmtRules.ToNative(pass.Rules, Allocator.TempJob);
             var nativeMods = OmtModifiers.ToNative(mods, Allocator.TempJob);
-            var primary = new NativeList<LineDrawItem>(8, Allocator.TempJob);
-            var secondary = new NativeList<LineDrawItem>(8, Allocator.TempJob);
+            var primary = new NativeList<OmtLineDrawItem>(8, Allocator.TempJob);
+            var secondary = new NativeList<OmtLineDrawItem>(8, Allocator.TempJob);
             new OmtLineItemsJob
             {
                 GeomTypes = layer.FeatureGeomTypesSlice,

@@ -15,10 +15,10 @@ namespace GeoFoundry.OpenMapTiles
     [CreateAssetMenu(menuName = "GeoFoundry/Layers/OpenMapTiles/Waterway", fileName = "OmtWaterway")]
     public sealed class OmtWaterwayHandler : OmtLayerHandler
     {
-        [Tooltip("Line material (GeoFoundry/Line Lit). Recommended Sorting Priority: -44.")]
+        [Tooltip("Line material (GeoFoundry/OMT Line Lit). Recommended Sorting Priority: -44.")]
         [SerializeField] private Material _material;
 
-        [Tooltip("Material of waterway bridges (GeoFoundry/Line Lit); empty draws them with the regular lines. " +
+        [Tooltip("Material of waterway bridges (GeoFoundry/OMT Line Lit); empty draws them with the regular lines. " +
                  "Recommended Sorting Priority: -28.")]
         [SerializeField] private Material _bridgeMaterial;
 

@@ -17,7 +17,7 @@
 //   Depth Texture (as MapLibre's calculate_visibility on terrain): the vertex shader compares the pulled anchor with
 //     the camera depth texture at a few points around it and fades the whole label by the visible fraction; the quad
 //     is then drawn at the near plane, so the ground and buildings never cut it. Needs the Depth Texture of the URP
-//     asset; MapViewShaderGlobals publishes per camera whether it is available (_GeoFoundryDepthOcclusion).
+//     asset; OmtTextSettings publishes per camera whether it is available (_GeoFoundryDepthOcclusion).
 //   Depth Buffer (also the fallback without the depth texture): the whole quad gets the depth of the pulled anchor
 //     and is depth-tested per pixel, so labels behind hills and buildings are hidden, but parts of a label can be cut
 //     where the ground or a building in front comes closer than the pulled anchor.
@@ -74,7 +74,7 @@ Shader "GeoFoundry/Label"
                 float _FadeRange;
             CBUFFER_END
 
-            // Set per camera by MapViewShaderGlobals: 1 if the camera depth texture is available.
+            // Set per camera by OmtTextSettings: 1 if the camera depth texture is available.
             float _GeoFoundryDepthOcclusion;
 
             #define WORLD_SIZE_METERS 40075016.685578488

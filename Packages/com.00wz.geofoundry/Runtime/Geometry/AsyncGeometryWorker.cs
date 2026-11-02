@@ -92,19 +92,14 @@ namespace GeoFoundry.Geometry
 
         /// <summary>
         /// Builds the features listed in <paramref name="items"/> as ribbons of a single <see cref="Mesh"/>, in list
-        /// order (see <see cref="LineDrawItem"/>): per-item width, vertex color, dash pattern, minimum zoom and
+        /// order (see <see cref="LineDrawItem"/>): per-item width, vertex color, dash pattern (TexCoord1) and
         /// optional Polygon outlines. The general-purpose line builder for schema handlers: casings, fills, dashed
         /// rails and boundaries, outlines. <paramref name="items"/> is borrowed. Returns <c>null</c> on cancellation
         /// or if nothing was emitted.
         /// </summary>
-        /// <remarks>
-        /// The ribbons are built and draped onto the ground at their width at <paramref name="metersPerPixel"/>
-        /// (normally the screen pixel size of the tile's zoom); the <c>GeoFoundry/Line Lit</c> shader resizes them at
-        /// the camera's pixel size (see <see cref="LineWidth"/>), so the mesh bounds are padded by a tenth of the tile.
-        /// </remarks>
         public static async Awaitable<Mesh> BuildLineMeshAsync(
             NativeMvtLayer layer, NativeArray<LineDrawItem> items, TileCoord coord, GroundGrid grid,
-            MercatorPivot localFrame, float metersPerPixel, CancellationToken ct)
+            MercatorPivot localFrame, CancellationToken ct)
         {
             JobInputs.RequireGrid(grid, nameof(grid));
             if (!items.IsCreated || items.Length == 0) return null;
@@ -112,10 +107,8 @@ namespace GeoFoundry.Geometry
             var job = CreateRoadJob(layer, null, coord, grid, localFrame, default, buffers);
             job.DrawItems = items;
             job.UseDrawItems = true;
-            job.BaseMetersPerPixel = metersPerPixel;
             job.EmitGlobalIndices = true;
-            return await RunSingleMeshAsync(job.Schedule(), buffers, $"Lines_{coord}", ct,
-                boundsPadding: 0.1f * (float)coord.SizeMeters());
+            return await RunSingleMeshAsync(job.Schedule(), buffers, $"Lines_{coord}", ct);
         }
 
         // ---- Roads -------------------------------------------------------------
@@ -236,31 +229,19 @@ namespace GeoFoundry.Geometry
 
         /// <summary>
         /// Builds all Polygon geometry of a tile's building layer as a single <see cref="Mesh"/>; an alternative to
-        /// <see cref="BuildBuildingTerrainMeshesAsync"/>. See <see cref="BuildSurfaceMeshAsync"/>. With an enabled
-        /// <paramref name="fade"/> the mesh carries the look at the start of the zoom fade for the
-        /// <c>GeoFoundry/Building Lit</c> shader (see <see cref="BuildingFade"/>), and its bounds are raised to the
-        /// fade's roof height, which may be above a feature's own top.
+        /// <see cref="BuildBuildingTerrainMeshesAsync"/>. See <see cref="BuildSurfaceMeshAsync"/>.
         /// </summary>
         public static async Awaitable<Mesh> BuildBuildingTerrainMeshAsync(
             NativeMvtLayer layer,
             NativeArray<bool> hidden, NativeArray<float> topMeters, NativeArray<float> bottomMeters,
             NativeArray<Color32> featureColors,
-            GroundGrid grid, TileCoord coord, MercatorPivot localFrame, CancellationToken ct,
-            BuildingFade fade = default)
+            GroundGrid grid, TileCoord coord, MercatorPivot localFrame, CancellationToken ct)
         {
             JobInputs.RequireGrid(grid, nameof(grid));
             var buffers = GeometryBuffers.Allocate(layer.FeatureCount);
             var job = CreateBuildingTerrainJob(layer, hidden, topMeters, bottomMeters, featureColors, grid, coord, localFrame, buffers);
             job.EmitGlobalIndices = true;
-            job.Fade = fade;
-            var mesh = await RunSingleMeshAsync(job.Schedule(), buffers, $"Buildings_{coord}", ct);
-            if (mesh != null && fade.Enabled && fade.TopMeters > 0f)
-            {
-                var bounds = mesh.bounds;
-                bounds.Encapsulate(bounds.max + new Vector3(0f, fade.TopMeters, 0f));
-                mesh.bounds = bounds;
-            }
-            return mesh;
+            return await RunSingleMeshAsync(job.Schedule(), buffers, $"Buildings_{coord}", ct);
         }
 
         // ---- Terrain -----------------------------------------------------------
@@ -365,7 +346,7 @@ namespace GeoFoundry.Geometry
                 Normals = buffers.Normals,
                 Uvs = buffers.Uvs,
                 Colors = buffers.Colors,
-                LineVertices = buffers.LineVertices,
+                Uv1 = buffers.Uv1,
                 Triangles = buffers.Triangles,
                 Ranges = buffers.Ranges,
                 RangeFeatureIndices = buffers.RangeFeatureIndices,
@@ -397,7 +378,6 @@ namespace GeoFoundry.Geometry
                 Normals = buffers.Normals,
                 Uvs = buffers.Uvs,
                 Colors = buffers.Colors,
-                FadeVertices = buffers.BuildingVertices,
                 Triangles = buffers.Triangles,
                 Ranges = buffers.Ranges,
                 RangeFeatureIndices = buffers.RangeFeatureIndices,
@@ -439,16 +419,14 @@ namespace GeoFoundry.Geometry
             }
         }
 
-        private static async Awaitable<Mesh> RunSingleMeshAsync(JobHandle handle, GeometryBuffers buffers, string name,
-            CancellationToken ct, float boundsPadding = 0f)
+        private static async Awaitable<Mesh> RunSingleMeshAsync(JobHandle handle, GeometryBuffers buffers, string name, CancellationToken ct)
         {
             if (!await CompleteOrDisposeAsync(handle, buffers, ct)) return null;
 
             try
             {
                 return await MeshAssembler.BuildSingleMeshAsync(
-                    buffers.Positions, buffers.Normals, buffers.Uvs, buffers.Colors, buffers.Triangles, name, ct,
-                    buffers.LineVertices, boundsPadding, buffers.BuildingVertices);
+                    buffers.Positions, buffers.Normals, buffers.Uvs, buffers.Colors, buffers.Triangles, name, ct, buffers.Uv1);
             }
             finally
             {

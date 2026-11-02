@@ -7,13 +7,6 @@
 // (e.g. the OpenMapTiles building `colour`) into the mesh; a MaterialPropertyBlock cannot express different
 // colors for buildings merged into one mesh.
 //
-// The building zoom fade (GeoFoundryBuildingFade.hlsl): meshes built with a GeoFoundry.Geometry.BuildingFade fade their
-// heights and colors in from the look of the lower-zoom tiles as the camera approaches. ForwardLit and GBuffer get it
-// through the forks (GEOFOUNDRY_BUILDING_FADE), ShadowCaster, DepthOnly and DepthNormals through vertex functions that
-// move the vertex and call the stock ones, so shadows and the depth textures match. MotionVectors renders the
-// geometry without the fade (object motion vectors are drawn only for renderers that moved). Meshes without the fade
-// attributes render unchanged.
-//
 // Unlike "GeoFoundry/Surface Lit", there are no Queue/ZTest changes: buildings render in normal depth order
 // (queue 2000), after the surfaces and on top of them.
 //
@@ -196,7 +189,6 @@ Shader "GeoFoundry/Building Lit"
             #pragma instancing_options renderinglayer
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
 
-            #define GEOFOUNDRY_BUILDING_FADE
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLitForwardPass.hlsl"
             ENDHLSL
@@ -222,7 +214,7 @@ Shader "GeoFoundry/Building Lit"
 
             // -------------------------------------
             // Shader Stages
-            #pragma vertex GeoFoundryShadowPassVertex
+            #pragma vertex ShadowPassVertex
             #pragma fragment ShadowPassFragment
 
             // -------------------------------------
@@ -249,17 +241,6 @@ Shader "GeoFoundry/Building Lit"
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/ShadowCasterPass.hlsl"
-            #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryBuildingFade.hlsl"
-
-            // The heights at the camera's zoom, as in ForwardLit.
-            Varyings GeoFoundryShadowPassVertex(Attributes input, float4 buildingFade : TEXCOORD4)
-            {
-                UNITY_SETUP_INSTANCE_ID(input);
-                float3 positionOS = input.positionOS.xyz;
-                GeoFoundryApplyBuildingFade(positionOS, buildingFade);
-                input.positionOS.xyz = positionOS;
-                return ShadowPassVertex(input);
-            }
             ENDHLSL
         }
 
@@ -346,7 +327,6 @@ Shader "GeoFoundry/Building Lit"
 
             // -------------------------------------
             // Includes
-            #define GEOFOUNDRY_BUILDING_FADE
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLitGBufferPass.hlsl"
             ENDHLSL
@@ -371,7 +351,7 @@ Shader "GeoFoundry/Building Lit"
 
             // -------------------------------------
             // Shader Stages
-            #pragma vertex GeoFoundryDepthOnlyVertex
+            #pragma vertex DepthOnlyVertex
             #pragma fragment DepthOnlyFragment
 
             // -------------------------------------
@@ -392,17 +372,6 @@ Shader "GeoFoundry/Building Lit"
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/DepthOnlyPass.hlsl"
-            #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryBuildingFade.hlsl"
-
-            // The heights at the camera's zoom, as in ForwardLit.
-            Varyings GeoFoundryDepthOnlyVertex(Attributes input, float4 buildingFade : TEXCOORD4)
-            {
-                UNITY_SETUP_INSTANCE_ID(input);
-                float3 positionOS = input.position.xyz;
-                GeoFoundryApplyBuildingFade(positionOS, buildingFade);
-                input.position.xyz = positionOS;
-                return DepthOnlyVertex(input);
-            }
             ENDHLSL
         }
 
@@ -425,7 +394,7 @@ Shader "GeoFoundry/Building Lit"
 
             // -------------------------------------
             // Shader Stages
-            #pragma vertex GeoFoundryDepthNormalsVertex
+            #pragma vertex DepthNormalsVertex
             #pragma fragment DepthNormalsFragment
 
             // -------------------------------------
@@ -453,17 +422,6 @@ Shader "GeoFoundry/Building Lit"
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitDepthNormalsPass.hlsl"
-            #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryBuildingFade.hlsl"
-
-            // The heights at the camera's zoom, as in ForwardLit.
-            Varyings GeoFoundryDepthNormalsVertex(Attributes input, float4 buildingFade : TEXCOORD4)
-            {
-                UNITY_SETUP_INSTANCE_ID(input);
-                float3 positionOS = input.positionOS.xyz;
-                GeoFoundryApplyBuildingFade(positionOS, buildingFade);
-                input.positionOS.xyz = positionOS;
-                return DepthNormalsVertex(input);
-            }
             ENDHLSL
         }
 

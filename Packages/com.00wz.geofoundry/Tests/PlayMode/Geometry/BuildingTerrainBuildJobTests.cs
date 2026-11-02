@@ -71,7 +71,6 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                 }
                 Assert.That(anyRoofY, Is.True);
                 Assert.That(anyWallBottomY, Is.True);
-                Assert.That(job.FadeVertices.Length, Is.EqualTo(0), "no fade attributes without a BuildingFade");
 
                 var meshes = MeshAssembler.BuildMeshes(
                     job.Positions.AsArray(), job.Normals.AsArray(), job.Uvs.AsArray(),
@@ -107,44 +106,6 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                     float y = job.Positions[i].y;
                     Assert.That(y, Is.EqualTo(3f).Within(1e-3f).Or.EqualTo(10f).Within(1e-3f),
                         "all vertices are at floor(3) or roof(10) level");
-                }
-            }
-            finally
-            {
-                buffers.Dispose();
-            }
-        });
-
-        [UnityTest]
-        public IEnumerator Fade_GivesEveryVertexItsHeightAboveTheStartLook() => Run(async ct =>
-        {
-            using var ground = new FlatGroundGridProvider();
-            var fade = new BuildingFade
-            {
-                StartZoom = 13.97f, Zooms = 1f, TopMeters = 5f, BottomMeters = 0f,
-                Color = new Color32(200, 190, 180, 255),
-            };
-            var color = new Color32(90, 120, 160, 255);
-            var (job, buffers) = MakeSingleFeatureJob(Square, top: 20f, bottom: 3f, hidden: false, FlatGrid(ground),
-                color, fade);
-            try
-            {
-                JobHandle handle = job.Schedule();
-                bool completed = await handle.WaitNonBlockingAsync(ct);
-                Assert.That(completed, Is.True);
-
-                Assert.That(job.FadeVertices.Length, Is.EqualTo(job.Positions.Length), "one fade entry per vertex");
-                for (int i = 0; i < job.Positions.Length; i++)
-                {
-                    var v = job.FadeVertices[i];
-                    float y = job.Positions[i].y;
-                    // Roof and wall tops rise from 5 m to 20 m, floor and wall bottoms from 0 m to 3 m.
-                    float expected = y > 10f ? 15f : 3f;
-                    Assert.That((float)v.Fade.x, Is.EqualTo(expected).Within(1e-2f), $"height delta of vertex {i} (y={y})");
-                    Assert.That((float)v.Fade.y, Is.EqualTo(13.97f).Within(0.01f), "start zoom");
-                    Assert.That((float)v.Fade.z, Is.EqualTo(1f), "fade length");
-                    Assert.That(v.Color, Is.EqualTo(job.Colors[i]), "feature color");
-                    Assert.That(v.FadeColor, Is.EqualTo(fade.Color), "color at the start of the fade");
                 }
             }
             finally
@@ -376,7 +337,6 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             private readonly NativeList<float3> _normals;
             private readonly NativeList<float2> _uvs;
             private readonly NativeList<Color32> _colors;
-            private readonly NativeList<BuildingFadeVertex> _fadeVertices;
             private readonly NativeList<int> _triangles;
             private readonly NativeList<MeshRange> _ranges;
             private readonly NativeList<int> _rangeFeatureIndices;
@@ -387,8 +347,8 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                 NativeArray<Color32> featureColors, NativeArray<int2> rings, NativeArray<int2> ringPoints,
                 NativeArray<float> gridHeights, NativeArray<Vector3> gridNormals,
                 NativeList<float3> positions, NativeList<float3> normals, NativeList<float2> uvs,
-                NativeList<Color32> colors, NativeList<BuildingFadeVertex> fadeVertices, NativeList<int> triangles,
-                NativeList<MeshRange> ranges, NativeList<int> rangeFeatureIndices)
+                NativeList<Color32> colors, NativeList<int> triangles, NativeList<MeshRange> ranges,
+                NativeList<int> rangeFeatureIndices)
             {
                 _featureGeomTypes = featureGeomTypes;
                 _featureRingRange = featureRingRange;
@@ -404,7 +364,6 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                 _normals = normals;
                 _uvs = uvs;
                 _colors = colors;
-                _fadeVertices = fadeVertices;
                 _triangles = triangles;
                 _ranges = ranges;
                 _rangeFeatureIndices = rangeFeatureIndices;
@@ -426,7 +385,6 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                 _normals.Dispose();
                 _uvs.Dispose();
                 _colors.Dispose();
-                _fadeVertices.Dispose();
                 _triangles.Dispose();
                 _ranges.Dispose();
                 _rangeFeatureIndices.Dispose();
@@ -435,8 +393,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
 
         /// <summary><paramref name="grid"/> is borrowed; the job buffers do not dispose it.</summary>
         private static (BuildingTerrainBuildJob job, JobBuffers buffers) MakeSingleFeatureJob(
-            int2[] footprint, float top, float bottom, bool hidden, GroundGrid grid, Color32? color = null,
-            BuildingFade fade = default)
+            int2[] footprint, float top, float bottom, bool hidden, GroundGrid grid, Color32? color = null)
         {
             var featureGeomTypes = new NativeArray<MvtGeomType>(new[] { MvtGeomType.Polygon }, Allocator.TempJob);
             var featureRingRange = new NativeArray<int2>(new[] { new int2(0, 1) }, Allocator.TempJob);
@@ -453,7 +410,6 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             var normals = new NativeList<float3>(Allocator.TempJob);
             var uvs = new NativeList<float2>(Allocator.TempJob);
             var colors = new NativeList<Color32>(Allocator.TempJob);
-            var fadeVertices = new NativeList<BuildingFadeVertex>(Allocator.TempJob);
             var triangles = new NativeList<int>(Allocator.TempJob);
             var ranges = new NativeList<MeshRange>(Allocator.TempJob);
             var rangeFeatureIndices = new NativeList<int>(Allocator.TempJob);
@@ -472,13 +428,11 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                 Extent = Extent,
                 UvScalePerMeter = 0.05f,
                 Grid = grid,
-                Fade = fade,
                 LocalFrame = Pivot,
                 Positions = positions,
                 Normals = normals,
                 Uvs = uvs,
                 Colors = colors,
-                FadeVertices = fadeVertices,
                 Triangles = triangles,
                 Ranges = ranges,
                 RangeFeatureIndices = rangeFeatureIndices,
@@ -487,7 +441,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             var buffers = new JobBuffers(
                 featureGeomTypes, featureRingRange, hiddenArr, topMeters, bottomMeters, featureColors,
                 rings, ringPoints, default, default, positions, normals, uvs, colors,
-                fadeVertices, triangles, ranges, rangeFeatureIndices);
+                triangles, ranges, rangeFeatureIndices);
 
             return (job, buffers);
         }
@@ -512,7 +466,6 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             var normals = new NativeList<float3>(Allocator.TempJob);
             var uvs = new NativeList<float2>(Allocator.TempJob);
             var colors = new NativeList<Color32>(Allocator.TempJob);
-            var fadeVertices = new NativeList<BuildingFadeVertex>(Allocator.TempJob);
             var triangles = new NativeList<int>(Allocator.TempJob);
             var ranges = new NativeList<MeshRange>(Allocator.TempJob);
             var rangeFeatureIndices = new NativeList<int>(Allocator.TempJob);
@@ -537,7 +490,6 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
                 Normals = normals,
                 Uvs = uvs,
                 Colors = colors,
-                FadeVertices = fadeVertices,
                 Triangles = triangles,
                 Ranges = ranges,
                 RangeFeatureIndices = rangeFeatureIndices,
@@ -546,7 +498,7 @@ namespace GeoFoundry.Tests.PlayMode.Geometry
             var buffers = new JobBuffers(
                 featureGeomTypes, featureRingRange, hiddenArr, topMeters, bottomMeters, featureColors,
                 rings, ringPoints, grid.Heights, grid.Normals, positions, normals, uvs, colors,
-                fadeVertices, triangles, ranges, rangeFeatureIndices);
+                triangles, ranges, rangeFeatureIndices);
 
             return (job, buffers);
         }

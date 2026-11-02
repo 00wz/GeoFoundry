@@ -12,6 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c56a80208fb84250b179989ec6da6cc0, type: 3}
   m_Name: OmtTransportation
   m_EditorClassIdentifier:
+  _widthMode: 1
   _lineMaterial: {fileID: 2100000, guid: 13452cebad5f4324a32cd22e5c1e3b03, type: 2}
+  _realWidthMaterial: {fileID: 2100000, guid: 21680cda71d94a53b8318b88833adafa, type: 2}
   _areaMaterial: {fileID: 2100000, guid: f6029c8fa8ba4b6abbca58ec68ebe4b0, type: 2}
   _text: {fileID: 11400000, guid: eb2b3119ab60483aa46dac454e5d2aaa, type: 2}

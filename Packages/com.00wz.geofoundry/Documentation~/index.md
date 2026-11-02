@@ -97,10 +97,14 @@ building geometry in your own handlers there are the `AsyncGeometryWorker` (`Geo
 ordered draw-list builders `BuildSurfaceMeshAsync(layer, SurfaceDrawItem[] …)` and `BuildLineMeshAsync`, and
 `GroundAnchors` for placing objects on the ground) and `MeshHierarchyInstance` (`GeoFoundry.Render.Layers`) helpers.
 
-Line meshes from `BuildLineMeshAsync` get their width from the `GeoFoundry/Line Lit` shader at the camera's pixel
-size (see [Line widths](#line-widths)), which `MapViewShaderGlobals` (`GeoFoundry.Render`) publishes before each
-camera renders. `GeoFoundryBootstrapper` creates it; a custom bootstrap creates it after its ground height provider,
-calls `Enable()` and disposes it on shutdown. Without it, lines render at the width they were built with.
+A handler that needs geometry these builders do not produce writes its own Burst job from the same building blocks, as
+the OpenMapTiles buildings and lines do: `NativeGroundProjector`, `NativeTriangleMath` (`GeoFoundry.Geometry.Projection`),
+`NativeMvtPolygonHelpers`, `NativeMvtLineHelpers`, `NativePolygonTriangulator` and `MeshPacking` (`GeoFoundry.Geometry`).
+
+Line meshes from `BuildLineMeshAsync` are ribbons of their real width in meters, with dashes in meters, for the
+`GeoFoundry/Line Lit` shader; the OpenMapTiles transportation handler uses them by default. The other OpenMapTiles
+line handlers build their own lines, whose width `GeoFoundry/OMT Line Lit` evaluates at the camera's pixel size (see
+[Line widths](#line-widths)).
 
 For another schema, write your own handlers on the model of the OpenMapTiles ones (see below);
 `SurfacesLayerHandler` and `DefaultTerrainHandler` do not depend on the schema and can be reused as is. Surface and
@@ -125,7 +129,7 @@ and the style is in [omt-schema-audit.md](omt-schema-audit.md).
 | `park` | `OmtParkHandler` | faint fill, outline band, names by `rank` |
 | `boundary` | `OmtBoundaryHandler` | lines by `admin_level` (2–4 drawn); `disputed` dashed; `maritime` below country level hidden; worldview filter on `claimed_by`; `aboriginal_lands` outlines |
 | `aeroway` | `OmtAerowayHandler` | area fills, runway/taxiway lines, `ref` labels |
-| `transportation` | `OmtTransportationHandler` | casing + fill + overlay ribbons by `class`/`subclass`; tunnels, ground and bridges ordered by `layer`; links (`ramp`) narrower and from z11; faded rail `service` tracks; optional `service`, `surface`, `access`, `toll` tints; `indoor`, `level`; oneway arrows; pedestrian/bridge/pier areas |
+| `transportation` | `OmtTransportationHandler` | casing + fill + overlay ribbons by `class`/`subclass`; tunnels, ground and bridges ordered by `layer`; links (`ramp`) narrower and from z11; faded rail `service` tracks; optional `service`, `surface`, `access`, `toll` tints; `indoor`, `level`; real-world (default) or style widths; oneway arrows; pedestrian/bridge/pier areas |
 | `building` | `OmtBuildingHandler` | terrain-conforming extrusion by `render_height`/`render_min_height`, `colour` tint (hex or CSS color names, first of a list), `hide_3d`; heights and colors fade in from the z13 blocks |
 | `water_name` | `OmtWaterNameHandler` | point labels by `class`, labels along lake center lines |
 | `transportation_name` | `OmtTransportationNameHandler` | street names along lines, `ref` shields, junction labels |
@@ -144,7 +148,7 @@ first for Russian names), the label and icon materials and the icon atlas (`OmtI
 icons with `Tools~/omt-icons/build_atlas.py`).
 
 `OmtTileScreenSize` is shared by `OmtTextSettings` and `OmtBuildingHandler`. Keep its `Max Pixels` equal to
-`GeoFoundryConfig.Lod.MaxTileScreenSizePixels` (both are 1500 by default): handlers cannot query the tile selection,
+`GeoFoundryConfig.Lod.MaxTileScreenSizePixels`: handlers cannot query the tile selection,
 and label decluttering and the building fade depend on how large tiles appear on screen (see
 [Widths and zooms](#widths-and-zooms)).
 
@@ -169,8 +173,8 @@ placeholders are replaced by the feature's values).
 
 ### Draw order
 
-Draped layers use the ZTest Always shaders `GeoFoundry/Surface Lit` (fills) and `GeoFoundry/Line Lit` (lines; adds
-widths at the camera's pixel size and dashes), so the material's Sorting Priority (`_QueueOffset`) decides which layer covers which. The preset materials
+Draped layers use the ZTest Always shaders `GeoFoundry/Surface Lit` (fills), `GeoFoundry/OMT Line Lit` (lines; adds
+widths at the camera's pixel size and dashes) and `GeoFoundry/Line Lit` (real-width transportation lines), so the material's Sorting Priority (`_QueueOffset`) decides which layer covers which. The preset materials
 follow `OmtDrawOrder`; a handler logs a warning in the inspector if an assigned material deviates from it:
 
 | Priority | Mesh | Priority | Mesh |
@@ -191,7 +195,7 @@ roads below bridges). Colors come from the style tables as vertex colors, so the
 color. The alpha of a color is the style's fill or line opacity: both draped shaders blend by the vertex alpha
 (staying in the opaque queue, where the Sorting Priority orders them), so semi-transparent fills such as the park
 tint or intermittent water show the layers below. In the deferred path they blend into the GBuffer like URP's GBuffer
-decals: always for `GeoFoundry/Line Lit`, and for `GeoFoundry/Surface Lit` when the material's **Deferred Blend** is
+decals: always for the line shaders, and for `GeoFoundry/Surface Lit` when the material's **Deferred Blend** is
 on (all layer presets; off for `DefaultTerrain`, the base layer that must write the whole GBuffer). Shaders of the
 layers below need no convention: any opaque URP shader (Lit, Shader Graph) works as a base.
 
@@ -200,11 +204,11 @@ layers below need no convention: any opaque URP shader (Lit, Shader Graph) works
 Scene units are Web Mercator meters. Style sizes are screen pixels, and zooms are display zooms (the MapLibre
 convention, where the world is `512 · 2^zoom` pixels wide).
 
-<a id="line-widths"></a>Line widths are evaluated by the `GeoFoundry/Line Lit` shader every frame, as in MapLibre and
-Mapbox: a real ground width (converted to Mercator meters at the tile's latitude), but at least a minimum width in
-screen pixels at the camera's pixel size (`LineWidth`), plus the casing border on each side. The pixel size is the
-one at the center of the view (`MapViewShaderGlobals`), one value for the whole scene, so a line has the same world
-width on every tile whatever its zoom, including the coarse tiles shown close up while the detailed ones load, and
+<a id="line-widths"></a>Line widths are evaluated by the `GeoFoundry/OMT Line Lit` shader every frame, as in MapLibre
+and Mapbox: a real ground width (converted to Mercator meters at the tile's latitude), but at least a minimum width in
+screen pixels at the camera's pixel size (`OmtLineWidth`), plus the casing border on each side. The pixel size is the
+one at the center of the view, computed in the shader from the camera matrices and measured to the height of each
+vertex, so on flat ground a line has the same world width on every tile whatever its zoom, including the coarse tiles shown close up while the detailed ones load, and
 perspective thins distant lines. Up close the real widths win; from afar the minimum pixels keep lines visible. A
 line rule's `MinZoom` (and its casing's `CasingMinZoom`) is a display zoom: the shader fades the line in over half a
 zoom as the camera reaches it. Lines are not filtered by the tile zoom, so a rule deeper than the deepest zoom of the
@@ -215,6 +219,13 @@ ribbon and follows the ground's tangent plane.
 
 A rule's width is `max(WidthMeters / metersPerPixel, MinWidthPixels)`. The defaults were fitted to the style's widths
 over zooms 12–16 at Moscow's latitude.
+
+By default the transportation handler draws its lines at their real ground width only (Width Mode Real World): the
+rules' `WidthMeters` and casing meters, without the pixel minimums and the zoom fade, built by `BuildLineMeshAsync`
+and drawn with `GeoFoundry/Line Lit` (preset material `OmtTransportationRealWidth`). Thin lines become sub-pixel from
+afar. Lines the style sizes in pixels only (paths, tracks, ferries) use the rule's `RealWidthMeters` (defaults: 2 m
+paths, 3 m tracks, 5 m ferries); casings without a border in meters are not drawn. Width Mode Style draws them as
+described above, with `GeoFoundry/OMT Line Lit` (preset material `OmtTransportation`).
 
 Labels are screen-space. The tile selection shows a tile of zoom `Z` while it is between `S / 2` and `S` pixels wide
 (`S` is `Lod.MaxTileScreenSizePixels`, mirrored in `OmtTileScreenSize.MaxPixels`), that is at display zooms
@@ -243,10 +254,9 @@ the labels; equal priorities are resolved by the label text, so tiles of differe
 ### Buildings
 
 The schema sends merged building blocks without heights or colors at zoom 13 and individual buildings with them from
-zoom 14. With **Fade In Detail** the `GeoFoundry/Building Lit` shader fades the heights and colors in from the look of
+zoom 14. With **Fade In Detail** the `GeoFoundry/OMT Building Lit` shader fades the heights and colors in from the look of
 the blocks (`Default Height`, `Default Color`) as the camera approaches, starting from the zoom at which the
-`Detail Zoom` tiles appear, so the tiles do not change their look at once. Meshes built without a `BuildingFade` render
-unchanged with the same material.
+`Detail Zoom` tiles appear, so the tiles do not change their look at once.
 
 ### Limitations
 

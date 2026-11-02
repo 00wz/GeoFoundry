@@ -29,6 +29,10 @@ namespace GeoFoundry.OpenMapTiles
     /// icons along the lines.
     /// </para>
     /// <para>
+    /// Line widths follow <see cref="OmtLineWidthMode"/>: by default the real ground width only
+    /// (<see cref="OmtLineMesh.BuildRealWidthAsync"/>), optionally as in the style (<see cref="OmtLineMesh.BuildAsync"/>).
+    /// </para>
+    /// <para>
     /// Polygons (pedestrian areas, bridge decks, platforms, piers) are a separate fill mesh. Attributes without a
     /// visual mapping in the style (<c>network</c>, <c>expressway</c>, <c>mtb_scale</c>, <c>foot</c>) are not used for
     /// rendering.
@@ -37,8 +41,18 @@ namespace GeoFoundry.OpenMapTiles
     [CreateAssetMenu(menuName = "GeoFoundry/Layers/OpenMapTiles/Transportation", fileName = "OmtTransportation")]
     public sealed class OmtTransportationHandler : OmtLayerHandler
     {
-        [Tooltip("Line material (GeoFoundry/Line Lit). Recommended Sorting Priority: -30.")]
+        [Tooltip("Real World: the real ground widths only (the rules' Real Width Meters, else Width Meters), drawn " +
+                 "with Real Width Material; rules with neither are not drawn. Style: widths as in the style (at least " +
+                 "a minimum in screen pixels, fade-in at the minimum zoom), drawn with Line Material.")]
+        [SerializeField]
+        private OmtLineWidthMode _widthMode = OmtLineWidthMode.RealWorld;
+
+        [Tooltip("Line material of the Style width mode (GeoFoundry/OMT Line Lit). Recommended Sorting Priority: -30.")]
         [SerializeField] private Material _lineMaterial;
+
+        [Tooltip("Line material of the Real World width mode (GeoFoundry/Line Lit). Recommended Sorting Priority: -30.")]
+        [SerializeField]
+        private Material _realWidthMaterial;
 
         [Tooltip("Area material (GeoFoundry/Surface Lit); leave empty to skip areas. Recommended Sorting Priority: -32.")]
         [SerializeField] private Material _areaMaterial;
@@ -100,8 +114,10 @@ namespace GeoFoundry.OpenMapTiles
                 output.Add(await OmtBuild.FillsAsync(ctx, _areas, "class", "subclass", areaMods, "TransportationAreas"), _areaMaterial);
             }
 
-            if (_lineMaterial != null && !ctx.Ct.IsCancellationRequested)
-                output.Add(await BuildLinesAsync(ctx), _lineMaterial);
+            bool realWidths = _widthMode == OmtLineWidthMode.RealWorld;
+            var lineMaterial = realWidths ? _realWidthMaterial : _lineMaterial;
+            if (lineMaterial != null && !ctx.Ct.IsCancellationRequested)
+                output.Add(await BuildLinesAsync(ctx, realWidths), lineMaterial);
 
             if (_text != null && _onewayArrows != null && _onewayArrows.Count > 0)
             {
@@ -131,10 +147,10 @@ namespace GeoFoundry.OpenMapTiles
             return job;
         }
 
-        private async Awaitable<Mesh> BuildLinesAsync(LayerLoadContext ctx)
+        private async Awaitable<Mesh> BuildLinesAsync(LayerLoadContext ctx, bool realWidths)
         {
             var rules = OmtRules.ToNative(_lines, Allocator.Persistent);
-            var items = new NativeList<LineDrawItem>(256, Allocator.Persistent);
+            var items = new NativeList<OmtLineDrawItem>(256, Allocator.Persistent);
             try
             {
                 var job = new OmtTransportationItemsJob
@@ -158,13 +174,17 @@ namespace GeoFoundry.OpenMapTiles
                     TollTint = _tollTint,
                     HideIndoor = _hideIndoor,
                     HideOtherLevels = _hideOtherLevels,
+                    RealWidths = realWidths,
                     Output = items,
                 };
                 if (!await job.Schedule().WaitNonBlockingAsync(ctx.Ct) || items.Length == 0) return null;
 
-                var mesh = await AsyncGeometryWorker.BuildLineMeshAsync(
-                    ctx.Layer, items.AsArray(), ctx.TileCoord, ctx.Grids.Center, ctx.LocalFrame,
-                    OmtZoom.MetersPerPixel(ctx.TileCoord.Z), ctx.Ct);
+                var mesh = realWidths
+                    ? await OmtLineMesh.BuildRealWidthAsync(
+                        ctx.Layer, items.AsArray(), ctx.TileCoord, ctx.Grids.Center, ctx.LocalFrame, ctx.Ct)
+                    : await OmtLineMesh.BuildAsync(
+                        ctx.Layer, items.AsArray(), ctx.TileCoord, ctx.Grids.Center, ctx.LocalFrame,
+                        OmtZoom.MetersPerPixel(ctx.TileCoord.Z), ctx.Ct);
                 if (mesh != null) mesh.name = $"Transportation_{ctx.TileCoord}";
                 return mesh;
             }
@@ -179,6 +199,7 @@ namespace GeoFoundry.OpenMapTiles
         protected override void ValidateMaterials()
         {
             CheckPriority(_lineMaterial, OmtDrawOrder.Transportation, "Line Material");
+            CheckPriority(_realWidthMaterial, OmtDrawOrder.Transportation, "Real Width Material");
             CheckPriority(_areaMaterial, OmtDrawOrder.TransportationAreas, "Area Material");
         }
 #endif
@@ -187,7 +208,9 @@ namespace GeoFoundry.OpenMapTiles
     /// <summary>
     /// Builds the ordered draw list of the transportation lines; see <see cref="OmtTransportationHandler"/> for the
     /// ordering and attribute rules. Like <see cref="OmtLineItemsJob"/>, lines are not filtered by the tile zoom: each
-    /// item carries its minimum display zoom for the line shader.
+    /// item carries its minimum display zoom for the line shader. With <see cref="RealWidths"/> the core widths are
+    /// <see cref="OmtLineRule.RealWidthMeters"/> where set, and casings without a border in meters are skipped (they
+    /// would be hidden under the fill).
     /// </summary>
     [BurstCompile]
     internal struct OmtTransportationItemsJob : IJob
@@ -200,8 +223,9 @@ namespace GeoFoundry.OpenMapTiles
         public Color32 BridgeCasing, White, Dirt, Background, Violet;
         public float RampWidth, LinkMinZoom, RailServiceOpacity, MinorServiceWidth, UnpavedTint, RestrictedFade, TollTint;
         public bool HideIndoor, HideOtherLevels;
+        public bool RealWidths;
 
-        public NativeList<LineDrawItem> Output;
+        public NativeList<OmtLineDrawItem> Output;
 
         private struct Entry
         {
@@ -210,7 +234,7 @@ namespace GeoFoundry.OpenMapTiles
             public int Order;
             public int Fi;
             public int Rule;
-            public LineWidth Width;
+            public OmtLineWidth Width;
             public Color32 Color;
             public bool Casing;
             public Color32 CasingColor;
@@ -269,7 +293,8 @@ namespace GeoFoundry.OpenMapTiles
                     Order = rule.Order,
                     Fi = fi,
                     Rule = ri,
-                    Width = OmtZoom.LineWidth(rule.WidthMeters, rule.MinWidthPixels, MercatorScale),
+                    Width = OmtZoom.LineWidth(RealWidths && rule.RealWidthMeters > 0f ? rule.RealWidthMeters : rule.WidthMeters,
+                        rule.MinWidthPixels, MercatorScale),
                     Color = rule.Color,
                     Casing = rule.HasCasing,
                     CasingColor = rule.CasingColor,
@@ -336,23 +361,25 @@ namespace GeoFoundry.OpenMapTiles
                 if (!e.Casing) continue;
                 var rule = Rules[e.Rule];
                 float bridge = e.Group == 2 ? 1f : 0f;
-                var w = e.Width.WithBorder(math.max(rule.CasingMeters, bridge) * MercatorScale,
+                float borderMeters = math.max(rule.CasingMeters, bridge);
+                if (RealWidths && borderMeters <= 0f) continue;
+                var w = e.Width.WithBorder(borderMeters * MercatorScale,
                     math.max(rule.CasingPixels, bridge));
-                Output.Add(new LineDrawItem(e.Fi, w, e.CasingColor, e.CasingDash, LineDrawFlags.None,
+                Output.Add(new OmtLineDrawItem(e.Fi, w, e.CasingColor, e.CasingDash, LineDrawFlags.None,
                     math.max(e.MinZoom, rule.CasingMinZoom)));
             }
             for (int i = start; i < end; i++)
             {
                 var e = entries[i];
                 var rule = Rules[e.Rule];
-                Output.Add(new LineDrawItem(e.Fi, e.Width, e.Color, rule.Dash, LineDrawFlags.None, e.MinZoom));
+                Output.Add(new OmtLineDrawItem(e.Fi, e.Width, e.Color, rule.Dash, LineDrawFlags.None, e.MinZoom));
             }
             for (int i = start; i < end; i++)
             {
                 var e = entries[i];
                 var rule = Rules[e.Rule];
                 if (!rule.HasOverlay || rule.OverlayWidth <= 0f) continue;
-                Output.Add(new LineDrawItem(e.Fi, e.Width.ScaleCore(rule.OverlayWidth), rule.OverlayColor,
+                Output.Add(new OmtLineDrawItem(e.Fi, e.Width.ScaleCore(rule.OverlayWidth), rule.OverlayColor,
                     rule.OverlayDash / rule.OverlayWidth, LineDrawFlags.None, e.MinZoom));
             }
         }

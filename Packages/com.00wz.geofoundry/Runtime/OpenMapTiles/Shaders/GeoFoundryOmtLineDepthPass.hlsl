@@ -1,29 +1,30 @@
-// GeoFoundry — DepthOnly and DepthNormals passes of GeoFoundry/Line Lit
+// GeoFoundry — DepthOnly and DepthNormals passes of GeoFoundry/OMT Line Lit
 // ============================================================================
 // Replace URP's DepthOnlyPass.hlsl / LitDepthNormalsPass.hlsl so that the depth and normals textures (SSAO, depth
-// priming) see the ribbons at the same width and with the same dashes as the color passes (GeoFoundryLineWidth.hlsl).
+// priming) see the ribbons at the same width and with the same dashes as the color passes (GeoFoundryOmtLineWidth.hlsl).
 // Line materials use no alpha test, normal, parallax or detail maps, so those paths of the originals are omitted.
 // ============================================================================
-#ifndef GEOFOUNDRY_LINE_DEPTH_PASS_INCLUDED
-#define GEOFOUNDRY_LINE_DEPTH_PASS_INCLUDED
+#ifndef GEOFOUNDRY_OMT_LINE_DEPTH_PASS_INCLUDED
+#define GEOFOUNDRY_OMT_LINE_DEPTH_PASS_INCLUDED
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 #if defined(LOD_FADE_CROSSFADE)
     #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/LODCrossFade.hlsl"
 #endif
-#include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLineWidth.hlsl"
+#include "Packages/com.00wz.geofoundry/Runtime/OpenMapTiles/Shaders/GeoFoundryOmtLineWidth.hlsl"
 
-struct GeoFoundryLineDepthAttributes
+struct OmtLineDepthAttributes
 {
     float4 positionOS   : POSITION;
     float3 normalOS     : NORMAL;
-    float4 uv0          : TEXCOORD0;
-    float4 uv1          : TEXCOORD1;
-    float4 uv2          : TEXCOORD2;
+    float2 uv0          : TEXCOORD0;
+    float4 uv3          : TEXCOORD3;
+    float4 width        : TEXCOORD4;
+    float2 uv5          : TEXCOORD5;
     UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
-struct GeoFoundryLineDepthVaryings
+struct OmtLineDepthVaryings
 {
     float4 positionCS   : SV_POSITION;
     float3 dash         : TEXCOORD0;
@@ -32,26 +33,26 @@ struct GeoFoundryLineDepthVaryings
     UNITY_VERTEX_OUTPUT_STEREO
 };
 
-GeoFoundryLineDepthVaryings GeoFoundryLineDepthVertex(GeoFoundryLineDepthAttributes input)
+OmtLineDepthVaryings OmtLineDepthVertex(OmtLineDepthAttributes input)
 {
-    GeoFoundryLineDepthVaryings output = (GeoFoundryLineDepthVaryings)0;
+    OmtLineDepthVaryings output = (OmtLineDepthVaryings)0;
     UNITY_SETUP_INSTANCE_ID(input);
     UNITY_TRANSFER_INSTANCE_ID(input, output);
     UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
     float3 positionOS = input.positionOS.xyz;
-    float2 dash = GeoFoundryWidenLine(positionOS, input.normalOS, input.uv0, input.uv1, input.uv2);
+    float2 dash = OmtWidenLine(positionOS, input.normalOS, input.uv3, input.width, input.uv5);
     output.positionCS = TransformObjectToHClip(positionOS);
     output.dash = float3(input.uv0.y, dash);
     output.normalWS = half3(TransformObjectToWorldNormal(input.normalOS));
     return output;
 }
 
-half GeoFoundryLineDepthOnlyFragment(GeoFoundryLineDepthVaryings input) : SV_TARGET
+half OmtLineDepthOnlyFragment(OmtLineDepthVaryings input) : SV_TARGET
 {
     UNITY_SETUP_INSTANCE_ID(input);
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
-    GeoFoundryClipDash(input.dash);
+    OmtClipDash(input.dash);
 
     #if defined(LOD_FADE_CROSSFADE)
         LODFadeCrossFade(input.positionCS);
@@ -60,8 +61,8 @@ half GeoFoundryLineDepthOnlyFragment(GeoFoundryLineDepthVaryings input) : SV_TAR
     return input.positionCS.z;
 }
 
-void GeoFoundryLineDepthNormalsFragment(
-    GeoFoundryLineDepthVaryings input
+void OmtLineDepthNormalsFragment(
+    OmtLineDepthVaryings input
     , out half4 outNormalWS : SV_Target0
 #ifdef _WRITE_RENDERING_LAYERS
     , out uint outRenderingLayers : SV_Target1
@@ -70,7 +71,7 @@ void GeoFoundryLineDepthNormalsFragment(
 {
     UNITY_SETUP_INSTANCE_ID(input);
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
-    GeoFoundryClipDash(input.dash);
+    OmtClipDash(input.dash);
 
     #if defined(LOD_FADE_CROSSFADE)
         LODFadeCrossFade(input.positionCS);

@@ -14,7 +14,7 @@ namespace GeoFoundry.OpenMapTiles
     [CreateAssetMenu(menuName = "GeoFoundry/Layers/OpenMapTiles/Boundary", fileName = "OmtBoundary")]
     public sealed class OmtBoundaryHandler : OmtLayerHandler
     {
-        [Tooltip("Line material (GeoFoundry/Line Lit). Recommended Sorting Priority: -26.")]
+        [Tooltip("Line material (GeoFoundry/OMT Line Lit). Recommended Sorting Priority: -26.")]
         [SerializeField] private Material _material;
 
         [Tooltip("Line styles by admin_level (compared as text).")]

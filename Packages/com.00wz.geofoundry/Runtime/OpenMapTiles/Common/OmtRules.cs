@@ -68,6 +68,10 @@ namespace GeoFoundry.OpenMapTiles
         [Tooltip("Minimum width in screen pixels at the camera's zoom, so the line stays visible from afar.")]
         [Min(0)] public float MinWidthPixels = 1f;
 
+        [Tooltip("Real ground width in meters of the Real World width mode (transportation), for lines the style " +
+                 "sizes in screen pixels; 0 uses Width Meters.")]
+        [Min(0)] public float RealWidthMeters;
+
         [Tooltip("Dash pattern in multiples of the line width (dash, gap); zero means a solid line.")]
         public Vector2 Dash;
 
@@ -116,6 +120,13 @@ namespace GeoFoundry.OpenMapTiles
             MinWidthPixels = minWidthPixels;
             Order = order;
             MinZoom = minZoom;
+        }
+
+        /// <summary>Sets the ground width of the Real World width mode (<see cref="RealWidthMeters"/>).</summary>
+        public OmtLineRule WithRealWidth(float meters)
+        {
+            RealWidthMeters = meters;
+            return this;
         }
 
         public OmtLineRule WithCasing(Color color, float pixels = 0.75f, float meters = 0.75f)
@@ -174,6 +185,7 @@ namespace GeoFoundry.OpenMapTiles
         public Color32 Color;
         public float WidthMeters;
         public float MinWidthPixels;
+        public float RealWidthMeters;
         public float2 Dash;
         public Color32 CasingColor;
         public bool HasCasing;
@@ -230,6 +242,7 @@ namespace GeoFoundry.OpenMapTiles
                     Color = OmtColor.ToVertex(r.Color),
                     WidthMeters = r.WidthMeters,
                     MinWidthPixels = r.MinWidthPixels,
+                    RealWidthMeters = r.RealWidthMeters,
                     Dash = new float2(r.Dash.x, r.Dash.y),
                     CasingColor = OmtColor.ToVertex(r.CasingColor),
                     HasCasing = r.CasingColor.a > 0f,

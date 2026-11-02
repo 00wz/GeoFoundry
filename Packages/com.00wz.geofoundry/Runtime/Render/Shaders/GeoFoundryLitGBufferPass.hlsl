@@ -2,19 +2,13 @@
 // with the same per-vertex color addition as GeoFoundryLitForwardPass.hlsl. The deferred path is not used
 // on WebGL, but it is forked alongside ForwardLit so forward and deferred behave the same on other platforms.
 // See GeoFoundryLitForwardPass.hlsl for the list of changes (search for "GEOFOUNDRY VERTEX COLOR" and
-// "GEOFOUNDRY LINE", "GEOFOUNDRY BUILDING FADE"). With _GEOFOUNDRY_GBUFFER_BLEND (search for "GEOFOUNDRY GBUFFER BLEND") semi-transparent
+// "GEOFOUNDRY DASH"). With _GEOFOUNDRY_GBUFFER_BLEND (search for "GEOFOUNDRY GBUFFER BLEND") semi-transparent
 // surfaces blend into the GBuffer like URP's GBuffer decals.
 #ifndef GEOFOUNDRY_LIT_GBUFFER_PASS_INCLUDED
 #define GEOFOUNDRY_LIT_GBUFFER_PASS_INCLUDED
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/GBufferOutput.hlsl"
-#ifdef GEOFOUNDRY_LINE
-    #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLineWidth.hlsl" // GEOFOUNDRY LINE
-#endif
-#ifdef GEOFOUNDRY_BUILDING_FADE
-    #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryBuildingFade.hlsl" // GEOFOUNDRY BUILDING FADE
-#endif
 #if defined(LOD_FADE_CROSSFADE)
     #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/LODCrossFade.hlsl"
 #endif
@@ -38,22 +32,10 @@ struct Attributes
     float4 positionOS   : POSITION;
     float3 normalOS     : NORMAL;
     float4 tangentOS    : TANGENT;
-#ifdef GEOFOUNDRY_LINE
-    // GEOFOUNDRY LINE: the line attributes (GeoFoundryLineWidth.hlsl); lines are never lightmapped, so the lightmap UV
-    // channels are reused and the Line Lit passes compile without the lightmap keywords.
-    float4 texcoord     : TEXCOORD0;
-    float4 staticLightmapUV   : TEXCOORD1;
-    float4 dynamicLightmapUV  : TEXCOORD2;
-#else
     float2 texcoord     : TEXCOORD0;
     float2 staticLightmapUV   : TEXCOORD1;
     float2 dynamicLightmapUV  : TEXCOORD2;
-#endif
     float4 color        : COLOR; // GEOFOUNDRY VERTEX COLOR
-#ifdef GEOFOUNDRY_BUILDING_FADE
-    float4 fadeColor    : TEXCOORD3; // GEOFOUNDRY BUILDING FADE: the color at the start of the fade
-    float4 buildingFade : TEXCOORD4; // GEOFOUNDRY BUILDING FADE: (height delta, start zoom, zooms, 0)
-#endif
     UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
@@ -91,8 +73,8 @@ struct Varyings
 #endif
 
     half4 vertexColor               : TEXCOORD11; // GEOFOUNDRY VERTEX COLOR
-#ifdef GEOFOUNDRY_LINE
-    float3 dash                     : TEXCOORD12; // GEOFOUNDRY LINE: x = distance along, yz = dash, gap (meters)
+#ifdef GEOFOUNDRY_DASH
+    float3 dash                     : TEXCOORD12; // GEOFOUNDRY DASH: x = distance along, yz = dash, gap
 #endif
 
     float4 positionCS               : SV_POSITION;
@@ -174,27 +156,14 @@ Varyings LitGBufferPassVertex(Attributes input)
     UNITY_TRANSFER_INSTANCE_ID(input, output);
     UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
-#ifdef GEOFOUNDRY_LINE
-    // GEOFOUNDRY LINE: the ribbon at the camera's pixel size.
-    float3 positionOS = input.positionOS.xyz;
-    float2 lineDash = GeoFoundryWidenLine(positionOS, input.normalOS, input.texcoord, input.staticLightmapUV,
-        input.dynamicLightmapUV);
-    VertexPositionInputs vertexInput = GetVertexPositionInputs(positionOS);
-#elif defined(GEOFOUNDRY_BUILDING_FADE)
-    // GEOFOUNDRY BUILDING FADE: the heights at the camera's zoom.
-    float3 positionOS = input.positionOS.xyz;
-    float buildingFade = GeoFoundryApplyBuildingFade(positionOS, input.buildingFade);
-    VertexPositionInputs vertexInput = GetVertexPositionInputs(positionOS);
-#else
     VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
-#endif
 
     // normalWS and tangentWS already normalize.
     // this is required to avoid skewing the direction during interpolation
     // also required for per-vertex lighting and SH evaluation
     VertexNormalInputs normalInput = GetVertexNormalInputs(input.normalOS, input.tangentOS);
 
-    output.uv = TRANSFORM_TEX(input.texcoord.xy, _BaseMap);
+    output.uv = TRANSFORM_TEX(input.texcoord, _BaseMap);
 
     // already normalized from normal transform to WS.
     output.normalWS = normalInput.normalWS;
@@ -234,11 +203,8 @@ Varyings LitGBufferPassVertex(Attributes input)
     #endif
 
     output.vertexColor = input.color; // GEOFOUNDRY VERTEX COLOR
-#ifdef GEOFOUNDRY_BUILDING_FADE
-    output.vertexColor = lerp(input.fadeColor, input.color, buildingFade); // GEOFOUNDRY BUILDING FADE
-#endif
-#ifdef GEOFOUNDRY_LINE
-    output.dash = float3(input.texcoord.y, lineDash); // GEOFOUNDRY LINE
+#ifdef GEOFOUNDRY_DASH
+    output.dash = float3(input.texcoord.y, input.staticLightmapUV); // GEOFOUNDRY DASH
 #endif
 
     output.positionCS = vertexInput.positionCS;
@@ -249,13 +215,25 @@ Varyings LitGBufferPassVertex(Attributes input)
 
 
 // Used in Standard (Physically Based) shader
+// GEOFOUNDRY DASH (only with #define GEOFOUNDRY_DASH, used by GeoFoundry/Line Lit): TEXCOORD0.y holds the distance
+// along the line in meters and TEXCOORD1 the dash pattern (dash, gap) in meters; (0, 0) is a solid line. Fragments in
+// the gaps are discarded.
+#ifdef GEOFOUNDRY_DASH
+void GeoFoundryClipDash(float3 dash)
+{
+    float period = dash.y + dash.z;
+    if (dash.y > 0.0 && dash.z > 0.0 && fmod(max(dash.x, 0.0), period) > dash.y)
+        discard;
+}
+#endif
+
 GBufferFragOutput LitGBufferPassFragment(Varyings input)
 {
     UNITY_SETUP_INSTANCE_ID(input);
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
-#ifdef GEOFOUNDRY_LINE
-    GeoFoundryClipDash(input.dash); // GEOFOUNDRY LINE
+#ifdef GEOFOUNDRY_DASH
+    GeoFoundryClipDash(input.dash); // GEOFOUNDRY DASH
 #endif
 
 #if defined(_PARALLAXMAP)

@@ -9,15 +9,9 @@
 //  3) LitPassVertex: pass-through to output.vertexColor
 //  4) LitPassFragment: multiplies surfaceData.albedo/alpha right after InitializeStandardLitSurfaceData
 //
-// Optional line support (search for "GEOFOUNDRY LINE"), compiled only with #define GEOFOUNDRY_LINE before the include
-// (GeoFoundry/Line Lit): TEXCOORD0..2 are float4 line attributes, the vertex is moved to the line width at the
-// camera's pixel size (GeoFoundryWidenLine, GeoFoundryLineWidth.hlsl), Varyings.dash (TEXCOORD12) carries the
-// distance along the line and the dash pattern in meters, and the fragment is discarded in the gaps.
-//
-// Optional building zoom fade (search for "GEOFOUNDRY BUILDING FADE"), compiled only with
-// #define GEOFOUNDRY_BUILDING_FADE before the include (GeoFoundry/Building Lit): TEXCOORD3/TEXCOORD4 carry the look at
-// the start of the fade (GeoFoundryBuildingFade.hlsl); the vertex moves to its height at the camera's zoom and the
-// vertex color blends from the start color to the feature color.
+// Optional dashing (search for "GEOFOUNDRY DASH"), compiled only with #define GEOFOUNDRY_DASH before the include
+// (GeoFoundry/Line Lit, GeoFoundry/OMT Line Lit): Varyings.dash (TEXCOORD12) carries the distance along the line (TEXCOORD0.y) and the dash
+// pattern (TEXCOORD1), and the fragment is discarded in the gaps.
 //
 // Optional blending by the vertex alpha (search for "GEOFOUNDRY VERTEX ALPHA"), compiled only with
 // #define GEOFOUNDRY_VERTEX_ALPHA (Surface Lit, Line Lit, whose ForwardLit pass blends with SrcAlpha OneMinusSrcAlpha):
@@ -30,12 +24,6 @@
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
-#ifdef GEOFOUNDRY_LINE
-    #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLineWidth.hlsl" // GEOFOUNDRY LINE
-#endif
-#ifdef GEOFOUNDRY_BUILDING_FADE
-    #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryBuildingFade.hlsl" // GEOFOUNDRY BUILDING FADE
-#endif
 
 #if defined(LOD_FADE_CROSSFADE)
     #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/LODCrossFade.hlsl"
@@ -56,22 +44,10 @@ struct Attributes
     float4 positionOS   : POSITION;
     float3 normalOS     : NORMAL;
     float4 tangentOS    : TANGENT;
-#ifdef GEOFOUNDRY_LINE
-    // GEOFOUNDRY LINE: the line attributes (GeoFoundryLineWidth.hlsl); lines are never lightmapped, so the lightmap UV
-    // channels are reused and the Line Lit passes compile without the lightmap keywords.
-    float4 texcoord     : TEXCOORD0;
-    float4 staticLightmapUV   : TEXCOORD1;
-    float4 dynamicLightmapUV  : TEXCOORD2;
-#else
     float2 texcoord     : TEXCOORD0;
     float2 staticLightmapUV   : TEXCOORD1;
     float2 dynamicLightmapUV  : TEXCOORD2;
-#endif
     float4 color        : COLOR; // GEOFOUNDRY VERTEX COLOR
-#ifdef GEOFOUNDRY_BUILDING_FADE
-    float4 fadeColor    : TEXCOORD3; // GEOFOUNDRY BUILDING FADE: the color at the start of the fade
-    float4 buildingFade : TEXCOORD4; // GEOFOUNDRY BUILDING FADE: (height delta, start zoom, zooms, 0)
-#endif
     UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
@@ -112,8 +88,8 @@ struct Varyings
 #endif
 
     half4 vertexColor               : TEXCOORD11; // GEOFOUNDRY VERTEX COLOR
-#ifdef GEOFOUNDRY_LINE
-    float3 dash                     : TEXCOORD12; // GEOFOUNDRY LINE: x = distance along, yz = dash, gap (meters)
+#ifdef GEOFOUNDRY_DASH
+    float3 dash                     : TEXCOORD12; // GEOFOUNDRY DASH: x = distance along, yz = dash, gap
 #endif
 
     float4 positionCS               : SV_POSITION;
@@ -227,20 +203,7 @@ Varyings LitPassVertex(Attributes input)
     UNITY_TRANSFER_INSTANCE_ID(input, output);
     UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
-#ifdef GEOFOUNDRY_LINE
-    // GEOFOUNDRY LINE: the ribbon at the camera's pixel size.
-    float3 positionOS = input.positionOS.xyz;
-    float2 lineDash = GeoFoundryWidenLine(positionOS, input.normalOS, input.texcoord, input.staticLightmapUV,
-        input.dynamicLightmapUV);
-    VertexPositionInputs vertexInput = GetVertexPositionInputs(positionOS);
-#elif defined(GEOFOUNDRY_BUILDING_FADE)
-    // GEOFOUNDRY BUILDING FADE: the heights at the camera's zoom.
-    float3 positionOS = input.positionOS.xyz;
-    float buildingFade = GeoFoundryApplyBuildingFade(positionOS, input.buildingFade);
-    VertexPositionInputs vertexInput = GetVertexPositionInputs(positionOS);
-#else
     VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
-#endif
 
     // normalWS and tangentWS already normalize.
     // this is required to avoid skewing the direction during interpolation
@@ -254,7 +217,7 @@ Varyings LitPassVertex(Attributes input)
         fogFactor = ComputeFogFactor(vertexInput.positionCS.z);
     #endif
 
-    output.uv = TRANSFORM_TEX(input.texcoord.xy, _BaseMap);
+    output.uv = TRANSFORM_TEX(input.texcoord, _BaseMap);
 
     // already normalized from normal transform to WS.
     output.normalWS = normalInput.normalWS;
@@ -292,11 +255,8 @@ Varyings LitPassVertex(Attributes input)
 #endif
 
     output.vertexColor = input.color; // GEOFOUNDRY VERTEX COLOR
-#ifdef GEOFOUNDRY_BUILDING_FADE
-    output.vertexColor = lerp(input.fadeColor, input.color, buildingFade); // GEOFOUNDRY BUILDING FADE
-#endif
-#ifdef GEOFOUNDRY_LINE
-    output.dash = float3(input.texcoord.y, lineDash); // GEOFOUNDRY LINE
+#ifdef GEOFOUNDRY_DASH
+    output.dash = float3(input.texcoord.y, input.staticLightmapUV); // GEOFOUNDRY DASH
 #endif
 
     output.positionCS = vertexInput.positionCS;
@@ -305,6 +265,18 @@ Varyings LitPassVertex(Attributes input)
 }
 
 
+
+// GEOFOUNDRY DASH (only with #define GEOFOUNDRY_DASH, used by GeoFoundry/Line Lit): TEXCOORD0.y holds the distance
+// along the line in meters and TEXCOORD1 the dash pattern (dash, gap) in meters; (0, 0) is a solid line. Fragments in
+// the gaps are discarded.
+#ifdef GEOFOUNDRY_DASH
+void GeoFoundryClipDash(float3 dash)
+{
+    float period = dash.y + dash.z;
+    if (dash.y > 0.0 && dash.z > 0.0 && fmod(max(dash.x, 0.0), period) > dash.y)
+        discard;
+}
+#endif
 
 // Used in Standard (Physically Based) shader
 void LitPassFragment(
@@ -318,8 +290,8 @@ void LitPassFragment(
     UNITY_SETUP_INSTANCE_ID(input);
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
-#ifdef GEOFOUNDRY_LINE
-    GeoFoundryClipDash(input.dash); // GEOFOUNDRY LINE
+#ifdef GEOFOUNDRY_DASH
+    GeoFoundryClipDash(input.dash); // GEOFOUNDRY DASH
 #endif
 
 #if defined(_PARALLAXMAP)

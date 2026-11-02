@@ -6,7 +6,6 @@ using GeoFoundry.Core.Handlers;
 using GeoFoundry.Core.Sources;
 using GeoFoundry.Core.TileSelection;
 using GeoFoundry.Ground;
-using GeoFoundry.Render;
 using GeoFoundry.TileIO.Net;
 using GeoFoundry.TileIO.Sources;
 using GeoFoundry.Tiles;
@@ -45,7 +44,6 @@ namespace GeoFoundry.Bootstrap
         private TransformFloatingOriginController _originController;
         private GroundGridProvider _ownedGridProvider;
         private GroundGridHeightProvider _groundHeightProvider;
-        private MapViewShaderGlobals _shaderGlobals;
         private TileDownloader _ownedDownloader;
         private IVectorTileSource _ownedVectorSource;
         private IDemTileSource _ownedDemSource;
@@ -98,8 +96,7 @@ namespace GeoFoundry.Bootstrap
         }
 
         /// <summary>
-        /// Shuts the subsystem down, consumers before what they use (manager → shader globals → terrain grids →
-        /// sources).
+        /// Shuts the subsystem down, consumers before what they use (manager → terrain grids → sources).
         /// Dispose cancels operations synchronously: when this method returns, no GeoFoundry HTTP requests are in
         /// flight; builds waiting on a job finish releasing when the job completes. OnDisable runs before scene
         /// teardown on exiting Play Mode, before a domain reload and when the editor closes, so no editor event
@@ -110,7 +107,6 @@ namespace GeoFoundry.Bootstrap
         {
             if (_manager != null) _manager.TileLoadFailed -= OnTileLoadFailed;
             DisposeSafely(_manager);
-            DisposeSafely(_shaderGlobals);
             DisposeSafely(_originController);
             DisposeSafely(_ownedGridProvider);
             DisposeSafely(_ownedVectorSource as System.IDisposable);
@@ -118,7 +114,6 @@ namespace GeoFoundry.Bootstrap
             DisposeSafely(_ownedDownloader);
 
             _manager              = null;
-            _shaderGlobals        = null;
             _originController     = null;
             _ownedGridProvider    = null;
             _groundHeightProvider = null;
@@ -225,10 +220,6 @@ namespace GeoFoundry.Bootstrap
                 _ownedGridProvider = new FlatGroundGridProvider();
             }
             _groundHeightProvider = new GroundGridHeightProvider(_ownedGridProvider);
-
-            // Camera pixel size for the line shader (widths evaluated per frame, as in MapLibre).
-            _shaderGlobals = new MapViewShaderGlobals(_originController, _groundHeightProvider);
-            _shaderGlobals.Enable();
 
             // LOD traversal. Tile priorities come from the camera binding if there is one (IMapCameraBinding;
             // MapCameraRig ranks by camera mode), otherwise from the camera position.

@@ -17,7 +17,7 @@ namespace GeoFoundry.Geometry
     /// The output is a 3-level CSR (polygon → ring → point), the same start + count pattern as
     /// <c>NativeMvtTile.Rings</c>/<c>RingPoints</c>.
     /// </summary>
-    internal static class NativeMvtPolygonHelpers
+    public static class NativeMvtPolygonHelpers
     {
         /// <summary>
         /// Splits the rings of ONE feature (<paramref name="featureRingRange"/> is (start, count) in

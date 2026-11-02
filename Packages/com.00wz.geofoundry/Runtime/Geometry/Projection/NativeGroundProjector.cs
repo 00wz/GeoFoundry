@@ -12,7 +12,7 @@ namespace GeoFoundry.Geometry.Projection
     /// <c>ref NativeList</c> arguments with no static shared buffers (each call uses its own local
     /// <see cref="FixedList128Bytes{T}"/>/<see cref="NativeList{T}"/>), so it is safe to use from concurrent jobs.
     /// </summary>
-    internal static class NativeGroundProjector
+    public static class NativeGroundProjector
     {
         /// <summary>
         /// Projects a triangle onto the ground. Output sub-triangles are appended in triples with per-vertex world

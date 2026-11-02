@@ -8,7 +8,7 @@ namespace GeoFoundry.Geometry.Projection
     /// intersections. Output goes to a <see cref="FixedList32Bytes{T}"/> (inline, no allocation; enough capacity,
     /// since a segment crosses a triangle boundary in at most 2 distinct points).
     /// </summary>
-    internal static class NativeTriangleMath
+    public static class NativeTriangleMath
     {
         public static bool IsDegenerate(float2 a, float2 b, float2 c, float eps = 1e-9f)
         {

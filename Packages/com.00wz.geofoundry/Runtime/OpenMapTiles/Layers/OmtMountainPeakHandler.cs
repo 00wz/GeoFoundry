@@ -14,7 +14,7 @@ namespace GeoFoundry.OpenMapTiles
     [CreateAssetMenu(menuName = "GeoFoundry/Layers/OpenMapTiles/Mountain Peak", fileName = "OmtMountainPeak")]
     public sealed class OmtMountainPeakHandler : OmtLayerHandler
     {
-        [Tooltip("Line material for ridges and cliffs (GeoFoundry/Line Lit); leave empty to skip. Recommended Sorting Priority: -27.")]
+        [Tooltip("Line material for ridges and cliffs (GeoFoundry/OMT Line Lit); leave empty to skip. Recommended Sorting Priority: -27.")]
         [SerializeField] private Material _lineMaterial;
 
         [SerializeField] private List<OmtLineRule> _lines = OmtStyleDefaults.MountainLines();

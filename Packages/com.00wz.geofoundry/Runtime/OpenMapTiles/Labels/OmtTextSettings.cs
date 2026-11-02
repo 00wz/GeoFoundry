@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace GeoFoundry.OpenMapTiles
 {
@@ -74,6 +76,15 @@ namespace GeoFoundry.OpenMapTiles
 
         private OmtGlyphCache _glyphs;
         private readonly List<Material> _textMaterials = new List<Material>();
+        private bool _publishesOcclusion;
+
+        /// <summary>
+        /// Name of the global shader property telling the <c>GeoFoundry/Label</c> shader whether the rendering camera has
+        /// the depth texture (1) or the labels fall back to the depth-buffer test (0).
+        /// </summary>
+        internal const string DepthOcclusionProperty = "_GeoFoundryDepthOcclusion";
+
+        private static readonly int DepthOcclusionId = Shader.PropertyToID(DepthOcclusionProperty);
         private readonly Dictionary<Transform, NativeParallelMultiHashMap<int, float4>> _occupancy =
             new Dictionary<Transform, NativeParallelMultiHashMap<int, float4>>();
 
@@ -116,6 +127,7 @@ namespace GeoFoundry.OpenMapTiles
         /// </summary>
         internal Material GetSlotMaterial(int slot)
         {
+            PublishOcclusion();
             if (slot == 0) return _iconMaterial;
             var glyphs = Glyphs;
             if (glyphs == null || _textMaterial == null || slot - 1 >= glyphs.Textures.Count) return null;
@@ -157,8 +169,40 @@ namespace GeoFoundry.OpenMapTiles
         // Not released in OnValidate: the atlases are referenced by the label meshes of loaded tiles.
         private void OnDisable() => Release();
 
+        /// <summary>
+        /// Starts publishing <see cref="DepthOcclusionProperty"/> before each camera renders, once labels are built: the
+        /// shader cannot tell itself whether URP renders the depth texture for the camera.
+        /// </summary>
+        private void PublishOcclusion()
+        {
+            if (_publishesOcclusion) return;
+            RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
+            _publishesOcclusion = true;
+        }
+
+        private static void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera) =>
+            Shader.SetGlobalFloat(DepthOcclusionId, HasDepthTexture(camera) ? 1f : 0f);
+
+        /// <summary>
+        /// Returns whether URP renders the depth texture for <paramref name="camera"/>: its own setting (which defaults
+        /// to the pipeline asset's Depth Texture), the asset's setting for cameras without URP data, and always for the
+        /// Scene view.
+        /// </summary>
+        internal static bool HasDepthTexture(Camera camera)
+        {
+            if (camera.cameraType == CameraType.SceneView) return true;
+            if (camera.TryGetComponent<UniversalAdditionalCameraData>(out var data)) return data.requiresDepthTexture;
+            return GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset asset &&
+                   asset.supportsCameraDepthTexture;
+        }
+
         private void Release()
         {
+            if (_publishesOcclusion)
+            {
+                RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
+                _publishesOcclusion = false;
+            }
             foreach (var m in _textMaterials)
             {
                 if (m == null) continue;

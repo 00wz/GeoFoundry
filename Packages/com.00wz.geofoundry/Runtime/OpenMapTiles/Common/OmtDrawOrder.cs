@@ -3,7 +3,7 @@ namespace GeoFoundry.OpenMapTiles
     /// <summary>
     /// Recommended Sorting Priority (<c>_QueueOffset</c>, resulting render queue = 2000 + priority) of the materials
     /// of the OpenMapTiles handlers. Draped meshes use the ZTest Always shaders (<c>GeoFoundry/Surface Lit</c>,
-    /// <c>GeoFoundry/Line Lit</c>), so the render queue alone decides which layer covers which; the order follows
+    /// <c>GeoFoundry/OMT Line Lit</c>), so the render queue alone decides which layer covers which; the order follows
     /// the <c>order</c> of the official "OSM OpenMapTiles" style. Priorities are set on the material assets in the
     /// editor (see the presets in <c>Presets/OpenMapTiles/Materials</c>); the handlers only warn in the inspector
     /// when an assigned material deviates from this table.

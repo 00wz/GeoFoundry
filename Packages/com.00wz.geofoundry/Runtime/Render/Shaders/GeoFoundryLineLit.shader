@@ -2,12 +2,11 @@
 // ============================================================================
 // GeoFoundry/Surface Lit (see GeoFoundrySurfaceLit.shader for the base changes against URP Lit: ZTest Always,
 // render-queue ordering through _QueueOffset, per-vertex color, blending by the vertex alpha in the forward and,
-// like GBuffer decals, the deferred path) plus line support: the ForwardLit and GBuffer passes
-// compile the forked passes with #define GEOFOUNDRY_LINE, and DepthOnly/DepthNormals use GeoFoundryLineDepthPass.hlsl.
-// Every pass resizes the ribbons at the camera's pixel size (_GeoFoundryMetersPerPixel, see GeoFoundryLineWidth.hlsl)
-// and discards fragments in the gaps of the dash pattern. The line attributes reuse the lightmap UV channels, so the
-// color passes compile without the lightmap keywords. Meshes without the attributes render at their built width,
-// solid.
+// like GBuffer decals, the deferred path) plus dashing: the ForwardLit and GBuffer passes
+// compile the forked passes with #define GEOFOUNDRY_DASH, which discards fragments in the gaps of the dash pattern
+// stored in TEXCOORD1 (dash, gap in meters) along the distance stored in TEXCOORD0.y. Lines are never lightmapped, so
+// TEXCOORD1 is reused and the color passes compile without the lightmap keywords. Meshes without TEXCOORD1 read (0, 0)
+// and render solid, so the shader also works for fills.
 //
 // Usage: line meshes built by AsyncGeometryWorker.BuildLineMeshAsync (OpenMapTiles roads, rails, waterways,
 // boundaries, outlines). Set the draw order through Advanced Options → Priority (_QueueOffset), see OmtDrawOrder.
@@ -187,7 +186,7 @@ Shader "GeoFoundry/Line Lit"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
 
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
-            #define GEOFOUNDRY_LINE
+            #define GEOFOUNDRY_DASH
             #define GEOFOUNDRY_VERTEX_ALPHA
             #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLitForwardPass.hlsl"
             ENDHLSL
@@ -327,7 +326,7 @@ Shader "GeoFoundry/Line Lit"
             // -------------------------------------
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
-            #define GEOFOUNDRY_LINE
+            #define GEOFOUNDRY_DASH
             #define _GEOFOUNDRY_GBUFFER_BLEND
             #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLitGBufferPass.hlsl"
             ENDHLSL
@@ -352,8 +351,8 @@ Shader "GeoFoundry/Line Lit"
 
             // -------------------------------------
             // Shader Stages
-            #pragma vertex GeoFoundryLineDepthVertex
-            #pragma fragment GeoFoundryLineDepthOnlyFragment
+            #pragma vertex DepthOnlyVertex
+            #pragma fragment DepthOnlyFragment
 
             // -------------------------------------
             // Material Keywords
@@ -372,7 +371,7 @@ Shader "GeoFoundry/Line Lit"
             // -------------------------------------
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
-            #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLineDepthPass.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/Shaders/DepthOnlyPass.hlsl"
             ENDHLSL
         }
 
@@ -395,8 +394,8 @@ Shader "GeoFoundry/Line Lit"
 
             // -------------------------------------
             // Shader Stages
-            #pragma vertex GeoFoundryLineDepthVertex
-            #pragma fragment GeoFoundryLineDepthNormalsFragment
+            #pragma vertex DepthNormalsVertex
+            #pragma fragment DepthNormalsFragment
 
             // -------------------------------------
             // Material Keywords
@@ -422,7 +421,7 @@ Shader "GeoFoundry/Line Lit"
             // -------------------------------------
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
-            #include "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLineDepthPass.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/Shaders/LitDepthNormalsPass.hlsl"
             ENDHLSL
         }
 

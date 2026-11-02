@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: OmtLanduseOutline
-  m_Shader: {fileID: 4800000, guid: b08088451b82454ca2db1c1b3b1e7349, type: 3}
+  m_Shader: {fileID: 4800000, guid: af61cd29251e4a5da0e43853a14a2c05, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []

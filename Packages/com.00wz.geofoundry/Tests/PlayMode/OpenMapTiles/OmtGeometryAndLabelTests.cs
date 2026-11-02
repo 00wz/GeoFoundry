@@ -15,7 +15,7 @@ using UnityEngine.TestTools;
 namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
 {
     /// <summary>
-    /// Draw-list geometry (<see cref="AsyncGeometryWorker.BuildLineMeshAsync"/>, the draw-item overload of
+    /// Draw-list geometry (<see cref="OmtLineMesh.BuildAsync"/>, the draw-item overload of
     /// <see cref="AsyncGeometryWorker.BuildSurfaceMeshAsync(GeoFoundry.Core.Mvt.NativeMvtLayer, NativeArray{SurfaceDrawItem}, TileCoord, GeoFoundry.Core.Ground.GroundGrid, MercatorPivot, float, System.Threading.CancellationToken)"/>),
     /// <see cref="GroundAnchors"/> and the label layout (<see cref="OmtLabelLayoutJob"/>) on synthetic data.
     /// </summary>
@@ -32,31 +32,35 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
                 .Polygon(OmtTestTile.Square(1000, 1000, 3000, 3000))
                 .Build();
             using var ground = new FlatGroundGridProvider();
-            var items = new NativeArray<LineDrawItem>(new[]
+            var items = new NativeArray<OmtLineDrawItem>(new[]
             {
-                new LineDrawItem(0, new LineWidth(8f, 2f), new Color32(255, 0, 0, 255), new float2(0.5f, 0.25f),
+                new OmtLineDrawItem(0, new OmtLineWidth(8f, 2f), new Color32(255, 0, 0, 255), new float2(0.5f, 0.25f),
                     LineDrawFlags.None, 13f),
-                new LineDrawItem(1, new LineWidth(4f), new Color32(0, 255, 0, 255), default, LineDrawFlags.PolygonOutline),
+                new OmtLineDrawItem(1, new OmtLineWidth(4f), new Color32(0, 255, 0, 255), default, LineDrawFlags.PolygonOutline),
             }, Allocator.Persistent);
             try
             {
-                var mesh = await AsyncGeometryWorker.BuildLineMeshAsync(
+                var mesh = await OmtLineMesh.BuildAsync(
                     tile.GetLayer(0), items, Coord, GroundTestUtils.FlatGrid(ground, Coord), Frame, 1f, ct);
                 Assert.That(mesh, Is.Not.Null);
                 Assert.That(mesh.vertexBufferCount, Is.EqualTo(4), "within the WebGL limit of 4 vertex streams");
-                for (int c = 0; c < 3; c++)
+                var channels = new[] { (0, 2), (3, 4), (4, 4), (5, 2) };
+                foreach (var (channel, dimension) in channels)
                 {
-                    var attribute = VertexAttribute.TexCoord0 + c;
-                    Assert.That(mesh.GetVertexAttributeDimension(attribute), Is.EqualTo(4), attribute.ToString());
+                    var attribute = VertexAttribute.TexCoord0 + channel;
+                    Assert.That(mesh.GetVertexAttributeDimension(attribute), Is.EqualTo(dimension), attribute.ToString());
                     Assert.That(mesh.GetVertexAttributeStream(attribute), Is.EqualTo(2), attribute.ToString());
                 }
+                Assert.That(mesh.HasVertexAttribute(VertexAttribute.TexCoord1), Is.False, "TEXCOORD1 is set by the shader");
 
-                var uv0 = new System.Collections.Generic.List<Vector4>();
-                var uv1 = new System.Collections.Generic.List<Vector4>();
-                var uv2 = new System.Collections.Generic.List<Vector4>();
+                var uv0 = new System.Collections.Generic.List<Vector2>();
+                var uv3 = new System.Collections.Generic.List<Vector4>();
+                var uv4 = new System.Collections.Generic.List<Vector4>();
+                var uv5 = new System.Collections.Generic.List<Vector2>();
                 mesh.GetUVs(0, uv0);
-                mesh.GetUVs(1, uv1);
-                mesh.GetUVs(2, uv2);
+                mesh.GetUVs(3, uv3);
+                mesh.GetUVs(4, uv4);
+                mesh.GetUVs(5, uv5);
                 var positions = mesh.vertices;
                 var colors = mesh.colors32;
                 bool line = false, outline = false;
@@ -66,16 +70,18 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
                     if (colors[i].r == 255)
                     {
                         line = true;
-                        Assert.That(uv1[i], Is.EqualTo(new Vector4(8f, 2f, 0f, 0f)), "the item's LineWidth");
-                        Assert.That(uv2[i], Is.EqualTo(new Vector4(0.5f, 0.25f, 4f, 13f)), "dash, built half width, min zoom");
+                        Assert.That(uv4[i], Is.EqualTo(new Vector4(8f, 2f, 0f, 0f)), "the item's OmtLineWidth");
+                        Assert.That(new Vector2(uv3[i].z, uv3[i].w), Is.EqualTo(new Vector2(0.5f, 0.25f)), "dash");
+                        Assert.That(uv5[i], Is.EqualTo(new Vector2(4f, 13f)), "built half width, min zoom");
+                        Assert.That(uv0[i].x, Is.InRange(0f, 1f), "across");
                         // The line runs along X: the extrusion is across it (Z) and leads back to the axis.
-                        Assert.That(uv0[i].z, Is.EqualTo(0f).Within(1e-4f));
-                        Assert.That(Mathf.Abs(uv0[i].w), Is.LessThanOrEqualTo(1f + 1e-4f));
-                        float z = positions[i].z - uv0[i].w * 4f;
+                        Assert.That(uv3[i].x, Is.EqualTo(0f).Within(1e-4f));
+                        Assert.That(Mathf.Abs(uv3[i].y), Is.LessThanOrEqualTo(1f + 1e-4f));
+                        float z = positions[i].z - uv3[i].y * 4f;
                         if (float.IsNaN(axisZ)) axisZ = z;
                         Assert.That(z, Is.EqualTo(axisZ).Within(1e-2f), "every vertex resolves to the line axis");
                     }
-                    if (colors[i].g == 255 && uv2[i].x == 0f && uv2[i].z == 2f) outline = true;
+                    if (colors[i].g == 255 && uv3[i].z == 0f && uv5[i].x == 2f) outline = true;
                 }
                 Assert.That(line, Is.True);
                 Assert.That(outline, Is.True, "the polygon outline is emitted (solid, half width 2 m)");

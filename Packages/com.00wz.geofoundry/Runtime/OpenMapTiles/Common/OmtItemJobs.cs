@@ -182,7 +182,7 @@ namespace GeoFoundry.OpenMapTiles
     }
 
     /// <summary>
-    /// Builds the ordered <see cref="LineDrawItem"/> lists of a line layer: matches LineString features (and, with
+    /// Builds the ordered <see cref="OmtLineDrawItem"/> lists of a line layer: matches LineString features (and, with
     /// <see cref="OutlinePolygons"/>, Polygon outlines) against the line rules, applies the modifiers, sorts by rule
     /// order and emits three passes per output: all casings, all fills, all overlays. Features with the
     /// <see cref="OmtModifierAction.Secondary"/> modifier go to <see cref="Secondary"/>. Lines are not filtered by
@@ -202,15 +202,15 @@ namespace GeoFoundry.OpenMapTiles
         public bool IncludeLines;
         public bool OutlinePolygons;
 
-        public NativeList<LineDrawItem> Primary;
-        public NativeList<LineDrawItem> Secondary;
+        public NativeList<OmtLineDrawItem> Primary;
+        public NativeList<OmtLineDrawItem> Secondary;
 
         private struct Resolved
         {
             public int Fi;
             public int Rule;
             public Color32 Color;
-            public LineWidth Width;
+            public OmtLineWidth Width;
             public float2 Dash;
             public bool Casing;
             public bool Outline;
@@ -284,7 +284,7 @@ namespace GeoFoundry.OpenMapTiles
             resolved.Dispose();
         }
 
-        private void Emit(NativeList<int4> keys, NativeList<Resolved> resolved, ref NativeList<LineDrawItem> output)
+        private void Emit(NativeList<int4> keys, NativeList<Resolved> resolved, ref NativeList<OmtLineDrawItem> output)
         {
             for (int pass = 0; pass < 3; pass++)
             {
@@ -297,17 +297,17 @@ namespace GeoFoundry.OpenMapTiles
                     {
                         case 0:
                             if (!r.Casing) break;
-                            output.Add(new LineDrawItem(r.Fi,
+                            output.Add(new OmtLineDrawItem(r.Fi,
                                 r.Width.WithBorder(rule.CasingMeters * MercatorScale, rule.CasingPixels),
                                 rule.CasingColor, default, flags, math.max(r.MinZoom, rule.CasingMinZoom)));
                             break;
                         case 1:
-                            output.Add(new LineDrawItem(r.Fi, r.Width, r.Color, r.Dash, flags, r.MinZoom));
+                            output.Add(new OmtLineDrawItem(r.Fi, r.Width, r.Color, r.Dash, flags, r.MinZoom));
                             break;
                         case 2:
                             if (!rule.HasOverlay || rule.OverlayWidth <= 0f) break;
                             // The overlay dash is relative to the fill width; the item's dash to its own core.
-                            output.Add(new LineDrawItem(r.Fi, r.Width.ScaleCore(rule.OverlayWidth), rule.OverlayColor,
+                            output.Add(new OmtLineDrawItem(r.Fi, r.Width.ScaleCore(rule.OverlayWidth), rule.OverlayColor,
                                 rule.OverlayDash / rule.OverlayWidth, flags, r.MinZoom));
                             break;
                     }

@@ -297,6 +297,7 @@ namespace GeoFoundry.OpenMapTiles
         /// Schema: motorway and trunk from z4, primary z8, secondary z9, tertiary z11, minor, raceway, track and paths
         /// z12, service z13; links z9; rail z8, light rail z11, subway, tram and monorail z14, aerialway z12, ferry z4,
         /// areas z13. Construction classes follow their road, except minor and service (z13), track and path (z14).
+        /// Lines the style sizes in pixels only have typical ground widths for the Real World width mode.
         /// </remarks>
         public static List<OmtLineRule> TransportationLines()
         {
@@ -326,22 +327,23 @@ namespace GeoFoundry.OpenMapTiles
                     .WithCasing(C("hsl(214, 30%, 65%)"), 0.6f, 0.5f),
                 new OmtLineRule("bus_guideway", "", C("hsl(214, 30%, 60%)"), 3f, 0.6f, 131, 13),
                 new OmtLineRule("raceway", "", C("hsl(351, 97%, 87%)"), 10f, 2.9f, 133, 12),
-                new OmtLineRule("track", "", C("hsl(42, 61%, 41%)"), 0f, 1.7f, 131, 12)
+                new OmtLineRule("track", "", C("hsl(42, 61%, 41%)"), 0f, 1.7f, 131, 12).WithRealWidth(3f)
                     .WithDash(3, 2.5f).WithCasing(A("hsl(0, 0%, 100%)", 0.5f), 0.3f, 0.5f).WithCasingMinZoom(13),
 
                 // Paths by subclass (bicycle/horse=designated are mapped to cycleway/bridleway by the handler).
                 new OmtLineRule("path", "pedestrian", C("hsl(240, 19%, 89%)"), 8.5f, 1.5f, 116, 12)
                     .WithCasing(C("hsl(0, 0%, 60%)"), 0.6f, 0.5f),
-                new OmtLineRule("path", "steps", C("hsl(6, 93%, 71%)"), 0f, 1.8f, 122, 12)
+                new OmtLineRule("path", "steps", C("hsl(6, 93%, 71%)"), 0f, 1.8f, 122, 12).WithRealWidth(2f)
                     .WithDash(0.5f, 0.5f).WithCasing(pathCasing, 1.1f, 0f).WithCasingMinZoom(15),
-                new OmtLineRule("path", "cycleway", C("hsl(240, 100%, 50%)"), 0f, 0.8f, 121, 12)
+                new OmtLineRule("path", "cycleway", C("hsl(240, 100%, 50%)"), 0f, 0.8f, 121, 12).WithRealWidth(2f)
                     .WithDash(2, 2).WithCasing(pathCasing, 1.1f, 0f).WithCasingMinZoom(15),
-                new OmtLineRule("path", "bridleway", C("hsl(120, 100%, 25%)"), 0f, 0.8f, 123, 12)
+                new OmtLineRule("path", "bridleway", C("hsl(120, 100%, 25%)"), 0f, 0.8f, 123, 12).WithRealWidth(2f)
                     .WithDash(2, 2).WithCasing(pathCasing, 1.1f, 0f).WithCasingMinZoom(15),
                 // Platform and corridor lines are not styled; they are extensions.
                 new OmtLineRule("path", "platform", C("hsl(0, 0%, 73%)"), 3f, 0.8f, 100, 13),
-                new OmtLineRule("path", "corridor", C("hsl(6, 60%, 80%)"), 0f, 0.9f, 124, 14).WithDash(2, 1),
-                new OmtLineRule("path", "", C("hsl(6, 93%, 71%)"), 0f, 0.9f, 124, 12)
+                new OmtLineRule("path", "corridor", C("hsl(6, 60%, 80%)"), 0f, 0.9f, 124, 14).WithRealWidth(2f)
+                    .WithDash(2, 1),
+                new OmtLineRule("path", "", C("hsl(6, 93%, 71%)"), 0f, 0.9f, 124, 12).WithRealWidth(2f)
                     .WithDash(2, 1).WithCasing(pathCasing, 0.9f, 0f).WithCasingMinZoom(15),
 
                 // Railways: gray line with white hatching (major) or light hatching (tram/light rail).
@@ -356,14 +358,15 @@ namespace GeoFoundry.OpenMapTiles
                     .WithOverlay(Color.white, 0.6f, 1.5f, 1.5f),
                 new OmtLineRule("aerialway", "", C("hsl(0, 0%, 50%)"), 1.5f, 1.5f, 201, 13)
                     .WithOverlay(C("hsl(0, 0%, 26%)"), 1.1f, 0.55f, 11f),
-                new OmtLineRule("ferry", "", C("hsl(240, 90%, 73%)"), 0f, 0.9f, 234, 6).WithDash(2, 2),
+                new OmtLineRule("ferry", "", C("hsl(240, 90%, 73%)"), 0f, 0.9f, 234, 6).WithRealWidth(5f)
+                    .WithDash(2, 2),
                 new OmtLineRule("pier", "", C("hsl(42, 49%, 93%)"), 1.5f, 0.9f, 98, 13),
             };
 
             // Roads under construction: the base color with white dashes, one width for all classes as in the style.
-            void Construction(string cls, string fill, float meters, float pixels, int minZoom) =>
+            void Construction(string cls, string fill, float meters, float pixels, int minZoom, float realMeters = 0f) =>
                 rules.Add(new OmtLineRule(cls + "_construction", "", C(fill), meters, pixels, 135, minZoom)
-                    .WithOverlay(Color.white, 1f, 1f, 1f));
+                    .WithRealWidth(realMeters).WithOverlay(Color.white, 1f, 1f, 1f));
             Construction("motorway", "hsl(349, 65%, 74%)", 7.5f, 3.1f, 5);
             Construction("trunk", "hsl(14, 89%, 79%)", 7.5f, 3.1f, 7);
             Construction("primary", "hsl(34, 94%, 82%)", 7.5f, 3.1f, 8);
@@ -373,9 +376,9 @@ namespace GeoFoundry.OpenMapTiles
             // Service under construction: white dashes of the service road width.
             rules.Add(new OmtLineRule("service_construction", "", white, 3.5f, 1.1f, 132, 13).WithDash(1, 1));
             // Not styled: track, raceway and path under construction.
-            Construction("track", "hsl(42, 61%, 60%)", 0f, 1.5f, 14);
+            Construction("track", "hsl(42, 61%, 60%)", 0f, 1.5f, 14, 3f);
             Construction("raceway", "hsl(351, 97%, 87%)", 7.5f, 3.1f, 12);
-            Construction("path", "hsl(6, 93%, 80%)", 0f, 0.9f, 14);
+            Construction("path", "hsl(6, 93%, 80%)", 0f, 0.9f, 14, 2f);
             return rules;
         }
 

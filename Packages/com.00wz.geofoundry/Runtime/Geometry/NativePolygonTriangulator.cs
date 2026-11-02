@@ -12,7 +12,7 @@ namespace GeoFoundry.Geometry
     /// <c>ringRanges</c>[0] is the exterior ring, [1..n] are holes (MVT/GeoJSON convention). Double
     /// precision is kept at the API boundary; coordinates are converted to float only inside the triangulator.
     /// </summary>
-    internal static class NativePolygonTriangulator
+    public static class NativePolygonTriangulator
     {
         /// <summary>
         /// Triangulates a polygon. Returns <c>true</c> if at least one triangle was produced.

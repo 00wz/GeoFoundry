@@ -56,10 +56,10 @@ namespace GeoFoundry.OpenMapTiles
         /// <summary>
         /// Returns a line width: the real width (converted to Mercator meters with <paramref name="mercatorScale"/>),
         /// but at least <paramref name="minPixels"/> screen pixels at the camera's pixel size (evaluated by the line
-        /// shader, see <see cref="GeoFoundry.Geometry.LineWidth"/>), so that lines stay visible from afar and keep their
+        /// shader, see <see cref="OmtLineWidth"/>), so that lines stay visible from afar and keep their
         /// physical size up close.
         /// </summary>
-        public static Geometry.LineWidth LineWidth(float realMeters, float minPixels, float mercatorScale) =>
-            new Geometry.LineWidth(realMeters * mercatorScale, minPixels);
+        public static OmtLineWidth LineWidth(float realMeters, float minPixels, float mercatorScale) =>
+            new OmtLineWidth(realMeters * mercatorScale, minPixels);
     }
 }
