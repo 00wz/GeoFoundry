@@ -52,8 +52,8 @@ For Web builds only:
 
 ### 4. Create the config and the component
 
-1. `Create → GeoFoundry → Config` — create a `GeoFoundryConfig` ScriptableObject and set the URLs of your servers: `VectorTilesEndpointTemplate` (martin, required) and `DemTilesEndpointTemplate` (titiler; leave empty for no terrain elevation). Both are empty by default — without a vector tile URL the bootstrapper does not start and logs an error to the Console. Example templates: `http://host:3000/moscow/{z}/{x}/{y}` (martin), `http://host:8000/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=/dem/dem.tif&algorithm=terrarium` (titiler).
-2. In the config, assign a terrain handler and layer handlers (a ready-made set for the OpenMapTiles schema is in the package's `Presets/OpenMapTiles/`) and adjust the loading and memory limits if needed.
+1. `Create → GeoFoundry → Config` — create a `GeoFoundryConfig` ScriptableObject and set the URLs of your servers: `VectorTilesEndpointTemplate` (martin, required) and `DemTilesEndpointTemplate` (titiler; leave empty for flat terrain without relief — the terrain handler is still required). Both are empty by default — without a vector tile URL the bootstrapper does not start and logs an error to the Console. Example templates: `http://host:3000/moscow/{z}/{x}/{y}` (martin), `http://host:8000/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=/dem/dem.tif&algorithm=terrarium` (titiler).
+2. In the config, assign a terrain handler (required) and layer handlers (a ready-made set for the OpenMapTiles schema is in the package's `Presets/OpenMapTiles/`) and adjust the loading and memory limits if needed.
 3. Create an empty GameObject at the origin (no rotation or scale — tiles become its children), add the `GeoFoundry → Map Bootstrapper` component and assign the config to it. The camera is optional — `Camera.main` is used if none is set.
 
 ## Architecture (asmdef layers)
@@ -173,9 +173,13 @@ placeholders are replaced by the feature's values).
 
 ### Draw order
 
-Draped layers use the ZTest Always shaders `GeoFoundry/Surface Lit` (fills), `GeoFoundry/OMT Line Lit` (lines; adds
-widths at the camera's pixel size and dashes) and `GeoFoundry/Line Lit` (real-width transportation lines), so the material's Sorting Priority (`_QueueOffset`) decides which layer covers which. The preset materials
-follow `OmtDrawOrder`; a handler logs a warning in the inspector if an assigned material deviates from it:
+Draped layers use the depth-tested shaders `GeoFoundry/Surface Lit` (fills), `GeoFoundry/OMT Line Lit` (lines; adds
+widths at the camera's pixel size and dashes) and `GeoFoundry/Line Lit` (real-width transportation lines): they test
+against the terrain depth (`ZTest LEqual` with a small polygon offset) and do not write depth (`ZWrite Off`), so the
+terrain hides layers behind hills regardless of their priority. The draped layers are coplanar with the terrain and
+with each other (they are built on the same ground grid), so the material's Sorting Priority (`_QueueOffset`) decides
+which layer covers which. The preset materials follow `OmtDrawOrder`; a handler logs a warning in the inspector if an
+assigned material deviates from it:
 
 | Priority | Mesh | Priority | Mesh |
 |---|---|---|---|
@@ -195,9 +199,14 @@ roads below bridges). Colors come from the style tables as vertex colors, so the
 color. The alpha of a color is the style's fill or line opacity: both draped shaders blend by the vertex alpha
 (staying in the opaque queue, where the Sorting Priority orders them), so semi-transparent fills such as the park
 tint or intermittent water show the layers below. In the deferred path they blend into the GBuffer like URP's GBuffer
-decals: always for the line shaders, and for `GeoFoundry/Surface Lit` when the material's **Deferred Blend** is
-on (all layer presets; off for `DefaultTerrain`, the base layer that must write the whole GBuffer). Shaders of the
-layers below need no convention: any opaque URP shader (Lit, Shader Graph) works as a base.
+decals: always for the line shaders, and for `GeoFoundry/Surface Lit` when the material's **Deferred Blend** is on
+(all layer presets). The terrain writes the whole GBuffer as any opaque object.
+
+The terrain is required: it is the occlusion base of all draped layers. It must render before them (priority −50) with
+an opaque depth-writing shader; `DefaultTerrain` uses the stock URP Lit, so the terrain itself needs no GeoFoundry
+shader. Without a terrain the layers have no ground depth and show artifacts, especially on relief bends: the
+bootstrapper refuses to start without a terrain handler, and a tile whose terrain build returns nothing fails instead
+of rendering a groundless stack.
 
 ### Widths and zooms
 

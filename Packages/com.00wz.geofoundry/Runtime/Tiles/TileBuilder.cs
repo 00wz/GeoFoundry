@@ -51,7 +51,10 @@ namespace GeoFoundry.Tiles
         /// geometry to the tile bounds.
         /// </param>
         /// <param name="vectorSource">Source of MVT tile bytes.</param>
-        /// <param name="terrainHandler">Builds the tile terrain; <c>null</c> for tiles without terrain.</param>
+        /// <param name="terrainHandler">Builds the tile terrain. Required by design: the draped layers are depth-tested
+        /// against the terrain and use its depth as the ground depth (see <c>GeoFoundrySurfaceLit.shader</c>);
+        /// <c>null</c> is still accepted for low-level tests and custom pipelines that provide the ground depth
+        /// themselves.</param>
         /// <param name="handlerRegistry">Layer handlers that build vector geometry.</param>
         /// <param name="loadNeighborGrids">
         /// Whether to also acquire the 8 neighbor grids for each tile (<see cref="TileGroundGrids"/>). Built-in
@@ -122,6 +125,15 @@ namespace GeoFoundry.Tiles
                     var tCtx = new TerrainLoadContext(centerGrid, coord, frame, tileData.Root, ct);
                     var terrainInst = await _terrainHandler.OnTerrainLoadedAsync(tCtx);
                     if (terrainInst != null) tileData.AttachTerrain(terrainInst);
+                    else
+                    {
+                        // The draped layers rely on the terrain depth for occlusion (ZTest LEqual + ZWrite Off).
+                        // A tile without ground would render a groundless stack of layers, so fail it instead.
+                        ct.ThrowIfCancellationRequested();
+                        throw new InvalidOperationException(
+                            $"The terrain handler returned no terrain for tile {coord}; draped layers require the " +
+                            "terrain depth buffer for occlusion.");
+                    }
                 }
 
                 ct.ThrowIfCancellationRequested();

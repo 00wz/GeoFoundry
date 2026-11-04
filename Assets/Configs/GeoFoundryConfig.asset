@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6a300923a028909478639f8ef10b0f5e, type: 3}
   m_Name: GeoFoundryConfig
   m_EditorClassIdentifier: GeoFoundry.Bootstrap::GeoFoundry.Bootstrap.GeoFoundryConfig
-  VectorTilesEndpointTemplate: http://192.168.253.55:3000/moscow/{z}/{x}/{y}
-  DemTilesEndpointTemplate: http://192.168.253.55:8000/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=/dem/dem.tif&algorithm=terrarium
+  VectorTilesEndpointTemplate: http://192.168.253.55:3000/planet/{z}/{x}/{y}
+  DemTilesEndpointTemplate: http://192.168.253.55:3000/dem/{z}/{x}/{y}
   Lod:
     MaxTileScreenSizePixels: 1000
     MaxZoom: 14
@@ -49,3 +49,4 @@ MonoBehaviour:
   TerrainGridResolution: 32
   EnableRelief: 1
   FloatingOriginThresholdMeters: 6000
+  TileSizePixels: 64

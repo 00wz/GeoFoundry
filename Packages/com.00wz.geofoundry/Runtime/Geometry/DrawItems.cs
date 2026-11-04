@@ -6,8 +6,8 @@ namespace GeoFoundry.Geometry
 {
     /// <summary>
     /// One entry of an ordered draw list for <see cref="AsyncGeometryWorker.BuildSurfaceMeshAsync(GeoFoundry.Core.Mvt.NativeMvtLayer, Unity.Collections.NativeArray{SurfaceDrawItem}, GeoFoundry.Core.Coordinates.TileCoord, GeoFoundry.Core.Ground.GroundGrid, GeoFoundry.Core.Coordinates.MercatorPivot, float, System.Threading.CancellationToken)"/>:
-    /// which Polygon feature to emit and with which vertex color. Items are emitted in array order, so with the
-    /// ZTest Always surface shaders the array order is the draw order inside the mesh. Features not listed are
+    /// which Polygon feature to emit and with which vertex color. Items are emitted in array order; the draped
+    /// surfaces are coplanar, so the array order is the draw order inside the mesh. Features not listed are
     /// skipped; a feature may be listed more than once.
     /// </summary>
     public struct SurfaceDrawItem

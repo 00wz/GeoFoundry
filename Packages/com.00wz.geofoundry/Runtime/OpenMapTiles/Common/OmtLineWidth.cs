@@ -90,8 +90,8 @@ namespace GeoFoundry.OpenMapTiles
 
     /// <summary>
     /// One entry of an ordered draw list for <see cref="OmtLineMesh.BuildAsync"/>: which feature to emit as a ribbon,
-    /// with which width, vertex color, dash pattern and minimum zoom. Items are emitted in array order, so with the
-    /// ZTest Always line shader the array order is the draw order inside the mesh.
+    /// with which width, vertex color, dash pattern and minimum zoom. Items are emitted in array order; the ribbons
+    /// are coplanar with the ground and with each other, so the array order is the draw order inside the mesh.
     /// </summary>
     public struct OmtLineDrawItem
     {

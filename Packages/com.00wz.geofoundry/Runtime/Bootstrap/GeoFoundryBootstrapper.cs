@@ -186,6 +186,17 @@ namespace GeoFoundry.Bootstrap
                 return null;
             }
 
+            // Draped layers are depth-tested against the terrain (ZTest LEqual + ZWrite Off) and use it as the
+            // ground depth: without it they would render without occlusion and artifact on relief bends.
+            if (_config.TerrainHandler == null)
+            {
+                Debug.LogError("[GeoFoundry] GeoFoundryBootstrapper: the terrain handler is required. Draped layers " +
+                               "are depth-tested against the terrain and use it as the ground depth; without it they " +
+                               "have no occlusion base and show artifacts on relief. Assign one in Config → " +
+                               "TerrainHandler.", this);
+                return null;
+            }
+
             WarnIfTransformNotIdentity();
 
             var viewCamera = ViewCamera;
@@ -211,7 +222,7 @@ namespace GeoFoundry.Bootstrap
             bool relief = _config.EnableRelief && !string.IsNullOrEmpty(_config.DemTilesEndpointTemplate);
             if (relief)
             {
-                var demSource      = new HttpDemTileSource(_config.DemTilesEndpointTemplate, _ownedDownloader);
+                var demSource      = new HttpDemTileSource(_config.DemTilesEndpointTemplate, _ownedDownloader, _config.TileSizePixels);
                 _ownedDemSource    = demSource;
                 _ownedGridProvider = new DemGroundGridProvider(demSource, _config.TerrainGridResolution);
             }

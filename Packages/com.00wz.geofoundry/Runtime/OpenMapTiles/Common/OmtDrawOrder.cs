@@ -2,14 +2,17 @@ namespace GeoFoundry.OpenMapTiles
 {
     /// <summary>
     /// Recommended Sorting Priority (<c>_QueueOffset</c>, resulting render queue = 2000 + priority) of the materials
-    /// of the OpenMapTiles handlers. Draped meshes use the ZTest Always shaders (<c>GeoFoundry/Surface Lit</c>,
-    /// <c>GeoFoundry/OMT Line Lit</c>), so the render queue alone decides which layer covers which; the order follows
-    /// the <c>order</c> of the official "OSM OpenMapTiles" style. Priorities are set on the material assets in the
-    /// editor (see the presets in <c>Presets/OpenMapTiles/Materials</c>); the handlers only warn in the inspector
-    /// when an assigned material deviates from this table.
+    /// of the OpenMapTiles handlers. Draped meshes use the depth-tested shaders (<c>GeoFoundry/Surface Lit</c>,
+    /// <c>GeoFoundry/OMT Line Lit</c>, <c>GeoFoundry/Line Lit</c>): they test against the terrain depth (ZTest LEqual
+    /// with a polygon offset) but do not write depth (ZWrite Off), so the terrain hides layers behind hills regardless
+    /// of priority. Among themselves the draped layers are coplanar, so the render queue decides which layer covers
+    /// which; the order follows the <c>order</c> of the official "OSM OpenMapTiles" style. Priorities are set on the
+    /// material assets in the editor (see the presets in <c>Presets/OpenMapTiles/Materials</c>); the handlers only warn
+    /// in the inspector when an assigned material deviates from this table.
     /// </summary>
     /// <remarks>
-    /// The range is bounded by the terrain (−50, drawn first) and the buildings (0, depth-tested and drawn after all
+    /// The range is bounded by the terrain (−50, drawn first with an opaque depth-writing shader such as URP Lit and
+    /// required by the draped layers as their occlusion base) and the buildings (0, depth-tested and drawn after all
     /// draped layers). Inside one mesh the order of the draw items decides (casing → fill, tunnels → ground →
     /// bridges), so one slot per mesh is enough. As in the style: land use and aeroway areas lie below the land cover
     /// (a park or grass inside a residential area stays visible); waterway lines lie below the water polygons (a river
@@ -17,6 +20,7 @@ namespace GeoFoundry.OpenMapTiles
     /// below the roads. The style draws stadiums and pitches between some land cover classes, here they stay with the
     /// rest of the land use; the park fill is not in the style and lies just below the water. Labels and icons render
     /// in the transparent queue and are not part of this table.
+    /// </remarks>
     /// </remarks>
     public static class OmtDrawOrder
     {

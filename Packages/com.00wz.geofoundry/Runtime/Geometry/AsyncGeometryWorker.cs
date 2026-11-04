@@ -70,8 +70,8 @@ namespace GeoFoundry.Geometry
         /// <summary>
         /// Builds the Polygon features listed in <paramref name="items"/> as a single <see cref="Mesh"/>, in list
         /// order and with each item's vertex color (see <see cref="SurfaceDrawItem"/>). Lets a handler filter
-        /// features, color them by attributes and control the draw order inside the mesh (with the ZTest Always
-        /// surface shaders, later triangles cover earlier ones). <paramref name="items"/> is borrowed. Returns
+        /// features, color them by attributes and control the draw order inside the mesh (the draped layers are
+        /// coplanar, so later triangles cover earlier ones). <paramref name="items"/> is borrowed. Returns
         /// <c>null</c> on cancellation or if nothing was emitted.
         /// </summary>
         public static async Awaitable<Mesh> BuildSurfaceMeshAsync(
