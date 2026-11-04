@@ -6,6 +6,9 @@
 // TEXCOORD1 (GEOFOUNDRY_DASH of the forked passes) and call the original ones; DepthOnly and DepthNormals use
 // GeoFoundryOmtLineDepthPass.hlsl, so the depth and normals textures see the same width and dashes. Keep the rest in
 // sync with GeoFoundryLineLit.shader.
+//
+// The ribbons are widened along the ground's tangent plane, so on sharp relief bends the polygon offset may need
+// tuning.
 // ============================================================================
 Shader "GeoFoundry/OMT Line Lit"
 {
@@ -116,8 +119,9 @@ Shader "GeoFoundry/OMT Line Lit"
             // GeoFoundry: blends by the vertex alpha (style opacity) while staying in the opaque queue, where the
             // render queue orders the draped layers; opaque vertices (alpha 1) overwrite as before.
             Blend SrcAlpha OneMinusSrcAlpha, One OneMinusSrcAlpha
-            ZWrite[_ZWrite]
-            ZTest Always              // GeoFoundry: surfaces draw in renderQueue order, without z-fighting
+            ZWrite Off                // GeoFoundry: keep the terrain depth; layers are coplanar with it
+            ZTest LEqual              // GeoFoundry: hills (terrain depth) occlude the draped layers
+            Offset -2, -1             // GeoFoundry: small bias for the test, against coplanar terrain depth
             Cull[_Cull]
             AlphaToMask[_AlphaToMask]
 
@@ -268,8 +272,9 @@ Shader "GeoFoundry/OMT Line Lit"
             Blend 1 SrcAlpha OneMinusSrcAlpha, Zero One
             Blend 2 SrcAlpha OneMinusSrcAlpha, Zero One
             Blend 3 SrcAlpha OneMinusSrcAlpha, Zero One
-            ZWrite[_ZWrite]
-            ZTest Always              // GeoFoundry: surfaces draw in renderQueue order
+            ZWrite Off                // GeoFoundry: keep the terrain depth; layers are coplanar with it
+            ZTest LEqual              // GeoFoundry: hills (terrain depth) occlude the draped layers
+            Offset -2, -1             // GeoFoundry: small bias for the test, against coplanar terrain depth
             Cull[_Cull]
 
             HLSLPROGRAM
@@ -362,7 +367,10 @@ Shader "GeoFoundry/OMT Line Lit"
 
             // -------------------------------------
             // Render State Commands
+            // GeoFoundry: same offset as ForwardLit, so the depth texture sees the line over the coplanar terrain.
             ZWrite On
+            ZTest LEqual
+            Offset -2, -1
             ColorMask R
             Cull[_Cull]
 
@@ -406,7 +414,10 @@ Shader "GeoFoundry/OMT Line Lit"
 
             // -------------------------------------
             // Render State Commands
+            // GeoFoundry: same offset as ForwardLit, so the normals texture sees the line over the coplanar terrain.
             ZWrite On
+            ZTest LEqual
+            Offset -2, -1
             Cull[_Cull]
 
             HLSLPROGRAM

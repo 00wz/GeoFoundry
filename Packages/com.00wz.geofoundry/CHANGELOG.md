@@ -48,3 +48,11 @@ Initial release.
 - OpenMapTiles buildings fade their heights and colors in from the zoom 13 blocks (`GeoFoundry/OMT Building Lit`).
 - Public geometry building blocks for custom handlers' jobs: `NativeGroundProjector`, `NativeTriangleMath`,
   `NativeMvtPolygonHelpers`, `NativeMvtLineHelpers`, `NativePolygonTriangulator`, `MeshPacking`.
+
+### Changed
+
+- Draped layer shaders (`GeoFoundry/Surface Lit`, `GeoFoundry/Line Lit`, `GeoFoundry/OMT Line Lit`) are depth-tested
+  (`ZTest LEqual` with `Offset -2, -1`) and no longer write depth (`ZWrite Off`). The terrain is their occlusion base:
+  layers behind hills are hidden regardless of Sorting Priority, and priority only orders coplanar layers.
+- The terrain handler is required: the draped layers use the terrain depth for occlusion. `DefaultTerrain` now uses
+  the stock URP Lit shader.

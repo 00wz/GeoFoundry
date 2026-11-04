@@ -1,12 +1,14 @@
 // GeoFoundry — Line Lit
 // ============================================================================
-// GeoFoundry/Surface Lit (see GeoFoundrySurfaceLit.shader for the base changes against URP Lit: ZTest Always,
-// render-queue ordering through _QueueOffset, per-vertex color, blending by the vertex alpha in the forward and,
-// like GBuffer decals, the deferred path) plus dashing: the ForwardLit and GBuffer passes
+// GeoFoundry/Surface Lit (see GeoFoundrySurfaceLit.shader for the base changes against URP Lit: ZTest LEqual with
+// a polygon offset, ZWrite Off, render-queue ordering through _QueueOffset, per-vertex color, blending by the vertex
+// alpha in the forward and, like GBuffer decals, the deferred path) plus dashing: the ForwardLit and GBuffer passes
 // compile the forked passes with #define GEOFOUNDRY_DASH, which discards fragments in the gaps of the dash pattern
 // stored in TEXCOORD1 (dash, gap in meters) along the distance stored in TEXCOORD0.y. Lines are never lightmapped, so
 // TEXCOORD1 is reused and the color passes compile without the lightmap keywords. Meshes without TEXCOORD1 read (0, 0)
 // and render solid, so the shader also works for fills.
+//
+// Like Surface Lit, the lines are depth-tested against the terrain, which is therefore required.
 //
 // Usage: line meshes built by AsyncGeometryWorker.BuildLineMeshAsync (OpenMapTiles roads, rails, waterways,
 // boundaries, outlines). Set the draw order through Advanced Options → Priority (_QueueOffset), see OmtDrawOrder.
@@ -120,8 +122,9 @@ Shader "GeoFoundry/Line Lit"
             // GeoFoundry: blends by the vertex alpha (style opacity) while staying in the opaque queue, where the
             // render queue orders the draped layers; opaque vertices (alpha 1) overwrite as before.
             Blend SrcAlpha OneMinusSrcAlpha, One OneMinusSrcAlpha
-            ZWrite[_ZWrite]
-            ZTest Always              // GeoFoundry: surfaces draw in renderQueue order, without z-fighting
+            ZWrite Off                // GeoFoundry: keep the terrain depth; layers are coplanar with it
+            ZTest LEqual              // GeoFoundry: hills (terrain depth) occlude the draped layers
+            Offset -2, -1             // GeoFoundry: small bias for the test, against coplanar terrain depth
             Cull[_Cull]
             AlphaToMask[_AlphaToMask]
 
@@ -260,8 +263,9 @@ Shader "GeoFoundry/Line Lit"
             Blend 1 SrcAlpha OneMinusSrcAlpha, Zero One
             Blend 2 SrcAlpha OneMinusSrcAlpha, Zero One
             Blend 3 SrcAlpha OneMinusSrcAlpha, Zero One
-            ZWrite[_ZWrite]
-            ZTest Always              // GeoFoundry: surfaces draw in renderQueue order
+            ZWrite Off                // GeoFoundry: keep the terrain depth; layers are coplanar with it
+            ZTest LEqual              // GeoFoundry: hills (terrain depth) occlude the draped layers
+            Offset -2, -1             // GeoFoundry: small bias for the test, against coplanar terrain depth
             Cull[_Cull]
 
             HLSLPROGRAM
@@ -342,7 +346,10 @@ Shader "GeoFoundry/Line Lit"
 
             // -------------------------------------
             // Render State Commands
+            // GeoFoundry: same offset as ForwardLit, so the depth texture sees the line over the coplanar terrain.
             ZWrite On
+            ZTest LEqual
+            Offset -2, -1
             ColorMask R
             Cull[_Cull]
 
@@ -386,7 +393,10 @@ Shader "GeoFoundry/Line Lit"
 
             // -------------------------------------
             // Render State Commands
+            // GeoFoundry: same offset as ForwardLit, so the normals texture sees the line over the coplanar terrain.
             ZWrite On
+            ZTest LEqual
+            Offset -2, -1
             Cull[_Cull]
 
             HLSLPROGRAM

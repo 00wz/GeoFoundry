@@ -51,7 +51,9 @@ namespace GeoFoundry.Tiles
         /// geometry to the tile bounds.
         /// </param>
         /// <param name="vectorSource">Source of MVT tile bytes.</param>
-        /// <param name="terrainHandler">Builds the tile terrain; <c>null</c> for tiles without terrain.</param>
+        /// <param name="terrainHandler">Builds the tile terrain. The draped layers use its depth for occlusion;
+        /// <c>null</c> is accepted only for low-level tests and custom pipelines that provide the ground depth
+        /// themselves.</param>
         /// <param name="handlerRegistry">Layer handlers that build vector geometry.</param>
         /// <param name="loadNeighborGrids">
         /// Whether to also acquire the 8 neighbor grids for each tile (<see cref="TileGroundGrids"/>). Built-in
@@ -122,6 +124,14 @@ namespace GeoFoundry.Tiles
                     var tCtx = new TerrainLoadContext(centerGrid, coord, frame, tileData.Root, ct);
                     var terrainInst = await _terrainHandler.OnTerrainLoadedAsync(tCtx);
                     if (terrainInst != null) tileData.AttachTerrain(terrainInst);
+                    else
+                    {
+                        // Draped layers need the terrain depth for occlusion: do not render a tile without ground.
+                        ct.ThrowIfCancellationRequested();
+                        throw new InvalidOperationException(
+                            $"The terrain handler returned no terrain for tile {coord}; the draped layers require " +
+                            "the terrain depth.");
+                    }
                 }
 
                 ct.ThrowIfCancellationRequested();

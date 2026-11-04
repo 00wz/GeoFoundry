@@ -15,10 +15,18 @@ namespace GeoFoundry.Render.Terrain
     [CreateAssetMenu(menuName = "GeoFoundry/Terrain/Default Terrain Handler", fileName = "DefaultTerrainHandler")]
     public sealed class DefaultTerrainHandler : TerrainHandlerSO
     {
+        [Tooltip("Opaque depth-writing material of the terrain; must render before the draped layers (Priority -50).")]
         [SerializeField] private Material _material;
 
         public override async Awaitable<ITerrainHandlerInstance> OnTerrainLoadedAsync(TerrainLoadContext ctx)
         {
+            if (_material == null)
+            {
+                Debug.LogError("[GeoFoundry] DefaultTerrainHandler: no terrain material assigned; the terrain is the " +
+                               "depth base of the draped layers.", this);
+                return null;
+            }
+
             var mesh = await AsyncGeometryWorker.BuildTerrainMeshAsync(ctx.Grid, ctx.TileCoord, ctx.LocalFrame, ctx.Ct);
             if (mesh == null) return null;
 

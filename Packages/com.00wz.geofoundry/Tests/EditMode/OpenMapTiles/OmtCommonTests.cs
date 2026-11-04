@@ -712,5 +712,46 @@ namespace GeoFoundry.Tests.EditMode.OpenMapTiles
                     Assert.That(material.renderQueue, Is.EqualTo(2000 + priority), name + " render queue");
             }
         }
+
+        /// <summary>
+        /// Draped layers must be depth-tested against the terrain and must not write depth: the terrain hides them
+        /// behind hills, and the render queue only orders coplanar layers. ZTest Always would paint them over hills.
+        /// </summary>
+        [Test]
+        public void DrapedShaders_AreDepthTestedAgainstTheTerrain()
+        {
+            string[] shaders =
+            {
+                "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundrySurfaceLit.shader",
+                "Packages/com.00wz.geofoundry/Runtime/Render/Shaders/GeoFoundryLineLit.shader",
+                "Packages/com.00wz.geofoundry/Runtime/OpenMapTiles/Shaders/GeoFoundryOmtLineLit.shader",
+            };
+            foreach (var path in shaders)
+            {
+                var state = System.IO.File.ReadAllLines(path).Select(l => l.Trim()).ToArray();
+                Assert.That(state.Any(l => l.StartsWith("ZTest Always")), Is.False, path);
+                Assert.That(state.Any(l => l.StartsWith("ZTest LEqual")), Is.True, path);
+                Assert.That(state.Any(l => l.StartsWith("Offset -2, -1")), Is.True, path);
+                Assert.That(state.Count(l => l.StartsWith("ZWrite Off")), Is.GreaterThanOrEqualTo(2),
+                    path + " must not write depth in ForwardLit and GBuffer");
+            }
+        }
+
+        /// <summary>
+        /// The terrain is the occlusion base of the draped layers: it must be an opaque depth-writing shader drawn
+        /// before them (queue 1950 in the presets, below the 1950..1974 range of the layers).
+        /// </summary>
+        [Test]
+        public void DefaultTerrain_UsesAnOpaqueUrpShaderThatRendersFirst()
+        {
+            var material = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(
+                "Packages/com.00wz.geofoundry/Presets/OpenMapTiles/Materials/DefaultTerrain.mat");
+            Assert.That(material, Is.Not.Null);
+            Assert.That(material.shader, Is.Not.Null, "the terrain shader is missing");
+            Assert.That(material.shader.name, Is.EqualTo("Universal Render Pipeline/Lit"));
+            Assert.That(material.GetFloat("_Surface"), Is.EqualTo(0f), "the terrain must be opaque");
+            Assert.That(material.GetFloat("_ZWrite"), Is.GreaterThan(0.5f), "the terrain must write depth");
+            Assert.That(material.renderQueue, Is.LessThan(2000), "the terrain must render before the draped layers");
+        }
     }
 }

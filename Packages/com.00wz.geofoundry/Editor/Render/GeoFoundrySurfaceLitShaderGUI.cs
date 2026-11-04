@@ -24,8 +24,8 @@ namespace GeoFoundry.Editor
 
         private static readonly GUIContent DeferredBlendText = EditorGUIUtility.TrTextContent("Deferred Blend",
             "Blends semi-transparent vertex colors into the GBuffer in the deferred path, like URP's GBuffer decals " +
-            "(smoothness, occlusion and material flags stay those of the surface below). Enable it for layers drawn " +
-            "over a base; leave it off for the base layer itself (the terrain). The forward path always blends.");
+            "(smoothness, occlusion and material flags stay those of the surface below). Enable it for draped layers " +
+            "drawn over the terrain; the forward path always blends.");
 
         private readonly ShaderGUI _lit = CreateLitGui();
 

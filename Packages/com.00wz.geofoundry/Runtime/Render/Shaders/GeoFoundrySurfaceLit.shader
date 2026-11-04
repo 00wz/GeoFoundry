@@ -1,9 +1,11 @@
 // GeoFoundry — Surface Lit
 // ============================================================================
-// Copy of URP Lit with three changes:
-//  1) SubShader/Tags "Queue" is raised to "Geometry-100", so surfaces render before opaque objects.
-//  2) The "ForwardLit" and "GBuffer" passes use ZTest Always: surfaces draw in RenderQueue order
-//     (adjustable per material) without z-fighting with the terrain base.
+// Copy of URP Lit with these changes:
+//  1) SubShader/Tags "Queue" is raised to "Geometry-100", so draped surfaces render before opaque objects.
+//  2) The "ForwardLit" and "GBuffer" passes are depth-tested (ZTest LEqual, Offset -2, -1) and do not write depth
+//     (ZWrite Off). The terrain renders first and writes the ground depth; layers behind hills are hidden regardless
+//     of Sorting Priority, and the render queue only orders the coplanar layers. The terrain is required: without it
+//     the layers have no occlusion base.
 //  3) The "ForwardLit" and "GBuffer" passes use the forks GeoFoundryLitForwardPass.hlsl/
 //     GeoFoundryLitGBufferPass.hlsl (shared with GeoFoundryBuildingLit.shader) instead of the stock
 //     LitForwardPass.hlsl/LitGBufferPass.hlsl. The forks add per-vertex color (albedo *= vertexColor),
@@ -12,19 +14,20 @@
 //     without leaving the opaque queue, so semi-transparent style fills show the layers below them. With the
 //     material's "Deferred Blend" (_GEOFOUNDRY_GBUFFER_BLEND) the "GBuffer" pass blends too, like URP's GBuffer
 //     decals: color channels by the vertex alpha, while smoothness, occlusion and material flags (GBuffer alpha
-//     channels) stay those of the surface below. Leave it off for a base layer such as the terrain, which must write
-//     the whole GBuffer.
+//     channels) stay those of the surface below.
 //
-// Usage: terrain / water / park / landuse / landcover / road materials.
+// Usage: draped layer materials (water / park / landuse / landcover / custom fills). The terrain uses an opaque
+// depth-writing shader (URP Lit in Presets/OpenMapTiles/Materials/DefaultTerrain.mat) and renders first (Priority -50).
 // IMPORTANT: for opaque materials, URP LitShader.ValidateMaterial forces renderQueue to 2000
 // (RenderQueue.Geometry) + _QueueOffset every time the material loads, ignoring the shader's Queue tag and
-// m_CustomRenderQueue in the .mat. The z-order between surfaces is therefore set ONLY through _QueueOffset
+// m_CustomRenderQueue in the .mat. The z-order between draped layers is therefore set ONLY through _QueueOffset
 // (Advanced Options → Priority, range ±50 in the inspector); see Packages/com.00wz.geofoundry/Presets/OpenMapTiles/Materials.
 // Buildings and other opaque geometry use "GeoFoundry/Building Lit" (offset 0, resulting queue 2000) and
 // render after the surfaces, on top of them.
 //
-// ZWrite stays ON: the surface writes terrain.y to the depth buffer so that subsequent transparent objects
-// get a correct depth test.
+// ZWrite is OFF: the depth buffer keeps the terrain depth (the layers are coplanar), which is also what later
+// transparent objects need. The DepthOnly and DepthNormals passes still write depth with the same offset, for the
+// depth texture and SSAO.
 // ============================================================================
 Shader "GeoFoundry/Surface Lit"
 {
@@ -142,8 +145,9 @@ Shader "GeoFoundry/Surface Lit"
             // GeoFoundry: blends by the vertex alpha (style opacity) while staying in the opaque queue, where the
             // render queue orders the draped layers; opaque vertices (alpha 1) overwrite as before.
             Blend SrcAlpha OneMinusSrcAlpha, One OneMinusSrcAlpha
-            ZWrite[_ZWrite]
-            ZTest Always              // GeoFoundry: surfaces draw in renderQueue order, without z-fighting
+            ZWrite Off                // GeoFoundry: keep the terrain depth; layers are coplanar with it
+            ZTest LEqual              // GeoFoundry: hills (terrain depth) occlude the draped layers
+            Offset -2, -1             // GeoFoundry: small bias for the test, against coplanar terrain depth
             Cull[_Cull]
             AlphaToMask[_AlphaToMask]
 
@@ -287,8 +291,9 @@ Shader "GeoFoundry/Surface Lit"
             Blend 1 [_GBufferSrcBlend] [_GBufferDstBlend], [_GBufferSrcBlendAlpha] [_GBufferDstBlendAlpha]
             Blend 2 [_GBufferSrcBlend] [_GBufferDstBlend], [_GBufferSrcBlendAlpha] [_GBufferDstBlendAlpha]
             Blend 3 [_GBufferSrcBlend] [_GBufferDstBlend], [_GBufferSrcBlendAlpha] [_GBufferDstBlendAlpha]
-            ZWrite[_ZWrite]
-            ZTest Always              // GeoFoundry: surfaces draw in renderQueue order
+            ZWrite Off                // GeoFoundry: keep the terrain depth; layers are coplanar with it
+            ZTest LEqual              // GeoFoundry: hills (terrain depth) occlude the draped layers
+            Offset -2, -1             // GeoFoundry: small bias for the test, against coplanar terrain depth
             Cull[_Cull]
 
             HLSLPROGRAM
@@ -374,7 +379,10 @@ Shader "GeoFoundry/Surface Lit"
 
             // -------------------------------------
             // Render State Commands
+            // GeoFoundry: same offset as ForwardLit, so the depth texture sees the layer over the coplanar terrain.
             ZWrite On
+            ZTest LEqual
+            Offset -2, -1
             ColorMask R
             Cull[_Cull]
 
@@ -418,7 +426,10 @@ Shader "GeoFoundry/Surface Lit"
 
             // -------------------------------------
             // Render State Commands
+            // GeoFoundry: same offset as ForwardLit, so the normals texture sees the layer over the coplanar terrain.
             ZWrite On
+            ZTest LEqual
+            Offset -2, -1
             Cull[_Cull]
 
             HLSLPROGRAM

@@ -186,6 +186,13 @@ namespace GeoFoundry.Bootstrap
                 return null;
             }
 
+            if (_config.TerrainHandler == null)
+            {
+                Debug.LogError("[GeoFoundry] GeoFoundryBootstrapper: the terrain handler is required: draped layers " +
+                               "use the terrain depth for occlusion. Assign one in Config → TerrainHandler.", this);
+                return null;
+            }
+
             WarnIfTransformNotIdentity();
 
             var viewCamera = ViewCamera;
@@ -211,7 +218,7 @@ namespace GeoFoundry.Bootstrap
             bool relief = _config.EnableRelief && !string.IsNullOrEmpty(_config.DemTilesEndpointTemplate);
             if (relief)
             {
-                var demSource      = new HttpDemTileSource(_config.DemTilesEndpointTemplate, _ownedDownloader);
+                var demSource      = new HttpDemTileSource(_config.DemTilesEndpointTemplate, _ownedDownloader, _config.TileSizePixels);
                 _ownedDemSource    = demSource;
                 _ownedGridProvider = new DemGroundGridProvider(demSource, _config.TerrainGridResolution);
             }

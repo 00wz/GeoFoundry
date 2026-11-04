@@ -32,7 +32,8 @@ namespace GeoFoundry.Bootstrap
         public TileQuadtreeConfig Lod = new();
 
         [Header("Handlers")]
-        [Tooltip("Terrain handler that builds the tile terrain (with relief or flat). If not set, no terrain is built.")]
+        [Tooltip("Required. Builds the tile terrain (with relief or flat). Its depth is the occlusion base of the " +
+                 "draped layers.")]
         public TerrainHandlerSO TerrainHandler;
 
         [Tooltip("Layer handlers, registered in list order.")]
@@ -86,6 +87,8 @@ namespace GeoFoundry.Bootstrap
         [Tooltip("When the camera moves horizontally farther than this distance (meters) from the current pivot, " +
                  "the pivot is moved under the camera.")]
         [Min(1f)] public float FloatingOriginThresholdMeters = 1000f;
+
+        public int TileSizePixels = 256; 
 
         /// <summary>Returns the initial position as (longitude, latitude) in decimal degrees.</summary>
         public double2 GetOriginLonLat() => new double2(OriginLongitude, OriginLatitude);

@@ -4,7 +4,7 @@ namespace GeoFoundry.Core.Handlers
 {
     /// <summary>
     /// Base class for terrain handlers configured in the Unity Editor as ScriptableObject assets.
-    /// Assign the asset to <c>GeoFoundryBootstrapper.TerrainHandler</c>.
+    /// Assign the asset to <c>GeoFoundryConfig.TerrainHandler</c>.
     /// </summary>
     public abstract class TerrainHandlerSO : ScriptableObject, ITerrainHandler
     {
