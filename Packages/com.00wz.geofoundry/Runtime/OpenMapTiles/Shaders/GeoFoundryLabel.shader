@@ -15,12 +15,18 @@
 // Occlusion. Both modes use the anchor pulled toward the camera by _DepthPull, so labels of POIs inside buildings
 // stay visible:
 //   Depth Texture (as MapLibre's calculate_visibility on terrain): the vertex shader compares the pulled anchor with
-//     the camera depth texture at a few points around it and fades the whole label by the visible fraction; the quad
-//     is then drawn at the near plane, so the ground and buildings never cut it. Needs the Depth Texture of the URP
-//     asset; OmtTextSettings publishes per camera whether it is available (_GeoFoundryDepthOcclusion).
-//   Depth Buffer (also the fallback without the depth texture): the whole quad gets the depth of the pulled anchor
-//     and is depth-tested per pixel, so labels behind hills and buildings are hidden, but parts of a label can be cut
-//     where the ground or a building in front comes closer than the pulled anchor.
+//     the camera depth texture at the anchor and 2 px around it, and fades the whole label by the visible fraction;
+//     the quad is then drawn at the near plane, so the ground and buildings never cut it. The comparison is in device
+//     depth. Each tap is tolerated by the smaller of the two opposite depth steps, which is the continuous slope: a
+//     building on one side still fails that tap and fades the label, while a distant terrain slope does not chatter.
+//     Needs the Depth Texture of the URP asset; OmtTextSettings publishes per camera whether it is available
+//     (_GeoFoundryDepthOcclusion).
+//   Depth Buffer (also the fallback without the depth texture, which is what web builds use): each pixel is tested
+//     against the hardware depth buffer. A tilted camera sees nearer ground toward the bottom of a screen-space
+//     label, and that ground would win a single anchor depth, so a pixel may move closer, onto the horizontal plane
+//     through the anchor pulled by _DepthPull. It never moves farther than the pulled anchor: the far side of that
+//     plane is behind the label, and objects there would otherwise occlude it. Hills and buildings in front of the
+//     anchor still occlude it.
 // ============================================================================
 Shader "GeoFoundry/Label"
 {
@@ -113,40 +119,91 @@ Shader "GeoFoundry/Label"
                 return log2(WORLD_SIZE_METERS / (TILE_PIXELS * mpp));
             }
 
-            // Eye depth of the scene at a screen UV (sampled in the vertex shader, hence the explicit LOD; the UV is
-            // mapped like SampleSceneDepth in DeclareDepthTexture.hlsl, which also handles render scaling).
-            float SceneEyeDepth(float2 uv)
+            // Device depth of the scene at a screen UV: the raw depth-buffer value, not linear eye depth. Sampled in
+            // the vertex shader, hence the explicit LOD. The UV is mapped like SampleSceneDepth in
+            // DeclareDepthTexture.hlsl, which also handles render scaling.
+            float SceneDeviceDepth(float2 uv)
             {
                 uv = ClampAndScaleUVForBilinear(UnityStereoTransformScreenSpaceTex(saturate(uv)),
                     _CameraDepthTexture_TexelSize.xy);
-                float raw = SAMPLE_TEXTURE2D_X_LOD(_CameraDepthTexture, sampler_PointClamp, uv, 0).r;
-                if (unity_OrthoParams.w > 0.5)
-                {
-                #if UNITY_REVERSED_Z
-                    raw = 1.0 - raw;
-                #endif
-                    return lerp(_ProjectionParams.y, _ProjectionParams.z, raw);
-                }
-                return LinearEyeDepth(raw, _ZBufferParams);
+                return SAMPLE_TEXTURE2D_X_LOD(_CameraDepthTexture, sampler_PointClamp, uv, 0).r;
             }
 
-            // Visible fraction of the anchor: the pulled anchor against the scene depth at the anchor and four points
-            // 2 px around it, so a label on the edge of a building fades instead of popping.
-            float AnchorVisibility(float4 anchorCS, float3 pulledWS)
+            // 1 while sceneZ is no closer than the pulled anchor plus allowance, then fading out across a quarter of
+            // that allowance. Reversed Z stores the near plane as 1, so a larger value is closer.
+            float DeviceDepthVisibility(float sceneZ, float pulledDeviceZ, float allowance)
+            {
+                float feather = max(allowance * 0.25, 1e-6);
+            #if UNITY_REVERSED_Z
+                return saturate((pulledDeviceZ + allowance + feather - sceneZ) / feather);
+            #else
+                return saturate((sceneZ + allowance + feather - pulledDeviceZ) / feather);
+            #endif
+            }
+
+            // World position at this clip xy and device depth. clip xy is the rasterized vertex (pixel offset already
+            // applied), so it is already in the same space as UNITY_MATRIX_VP.
+            float3 UnprojectDevice(float2 clipXYOverW, float deviceZ)
+            {
+                float4 ws = mul(UNITY_MATRIX_I_VP, float4(clipXYOverW, deviceZ, 1.0));
+                return ws.xyz / ws.w;
+            }
+
+            // Device depth for a depth-buffer label pixel. The horizontal plane through the anchor is closer than
+            // the anchor where the label extends toward the camera (the bottom of the screen on a tilted view); use
+            // it there so the near ground does not cut the glyph. Where that plane is farther, keep the pulled
+            // anchor — otherwise objects behind the label win the depth test.
+            float GroundPlaneDeviceDepth(float2 clipXYOverW, float anchorDeviceZ, float3 anchorWS, float pulledDeviceZ)
+            {
+                float closerZ = lerp(anchorDeviceZ, UNITY_NEAR_CLIP_VALUE, 0.5);
+                float3 closerWS = UnprojectDevice(clipXYOverW, closerZ);
+                float3 atAnchorWS = UnprojectDevice(clipXYOverW, anchorDeviceZ);
+                float3 dir = atAnchorWS - closerWS;
+                float denom = dir.y;
+                float t = (anchorWS.y - closerWS.y) / denom;
+                if (!(abs(denom) > 1e-5 && t > 0.0)) return pulledDeviceZ;
+
+                float3 hitWS = closerWS + dir * t;
+                float3 toCamera = GetCameraPositionWS() - hitWS;
+                float camDist = length(toCamera);
+                hitWS += toCamera / max(camDist, 1e-3) * min(_DepthPull, camDist * 0.9);
+                float4 hitCS = TransformWorldToHClip(hitWS);
+                if (hitCS.w <= 0.0) return pulledDeviceZ;
+                float planeZ = hitCS.z / hitCS.w;
+            #if UNITY_REVERSED_Z
+                return max(planeZ, pulledDeviceZ); // reversed Z: larger is closer
+            #else
+                return min(planeZ, pulledDeviceZ);
+            #endif
+            }
+
+            // Visible fraction of the anchor. The five taps (center and 2 px around it) are what fades a label as a
+            // building edge covers it. The allowance is the smaller step to either side, so it follows the continuous
+            // surface and does not swallow the building: a tap on the building still drops out, a tap on a distant
+            // slope stays lit instead of flickering.
+            float AnchorVisibility(float4 anchorCS, float pulledDeviceZ)
             {
                 float2 ndc = anchorCS.xy / anchorCS.w;
                 float2 uv = ndc * 0.5 + 0.5;
                 if (_ProjectionParams.x < 0.0) uv.y = 1.0 - uv.y; // flipped projection: back to texture space
                 if (any(uv < 0.0) || any(uv > 1.0)) return 1.0;  // anchor off screen: nothing to test against
 
-                float eye = -TransformWorldToView(pulledWS).z;
                 float2 px = 2.0 / _ScreenParams.xy;
+                float zC = SceneDeviceDepth(uv);
+                float zL = SceneDeviceDepth(uv - float2(px.x, 0));
+                float zR = SceneDeviceDepth(uv + float2(px.x, 0));
+                float zD = SceneDeviceDepth(uv - float2(0, px.y));
+                float zU = SceneDeviceDepth(uv + float2(0, px.y));
+                // Smaller opposite step: the continuous slope. A building on one side leaves the other side intact.
+                float ax = min(abs(zC - zL), abs(zC - zR));
+                float ay = min(abs(zC - zD), abs(zC - zU));
+
                 float visible = 0.0;
-                visible += step(eye, SceneEyeDepth(uv));
-                visible += step(eye, SceneEyeDepth(uv + float2(px.x, 0)));
-                visible += step(eye, SceneEyeDepth(uv - float2(px.x, 0)));
-                visible += step(eye, SceneEyeDepth(uv + float2(0, px.y)));
-                visible += step(eye, SceneEyeDepth(uv - float2(0, px.y)));
+                visible += DeviceDepthVisibility(zC, pulledDeviceZ, 0.5 * (ax + ay));
+                visible += DeviceDepthVisibility(zL, pulledDeviceZ, 1.5 * ax + 0.5 * ay);
+                visible += DeviceDepthVisibility(zR, pulledDeviceZ, 1.5 * ax + 0.5 * ay);
+                visible += DeviceDepthVisibility(zD, pulledDeviceZ, 0.5 * ax + 1.5 * ay);
+                visible += DeviceDepthVisibility(zU, pulledDeviceZ, 0.5 * ax + 1.5 * ay);
                 return visible / 5.0;
             }
 
@@ -167,9 +224,10 @@ Shader "GeoFoundry/Label"
                 // Zoom fade.
                 float zoom = DisplayZoom(anchorWS);
                 float fade = saturate((zoom - input.uv1.z) / _FadeRange) * saturate((input.uv1.w - zoom) / _FadeRange);
-                bool depthTexture = _Occlusion > 0.5 && _GeoFoundryDepthOcclusion > 0.5;
-                if (depthTexture && fade > 0.0 && clip.w > 0.0) fade *= AnchorVisibility(clip, pulledWS);
                 float4 pulledCS = TransformWorldToHClip(pulledWS);
+                bool depthTexture = _Occlusion > 0.5 && _GeoFoundryDepthOcclusion > 0.5;
+                if (depthTexture && fade > 0.0 && clip.w > 0.0 && pulledCS.w > 0.0)
+                    fade *= AnchorVisibility(clip, pulledCS.z / pulledCS.w);
 
                 // Pixel offset, optionally rotated to the screen direction of the tangent.
                 float2 offset = input.uv1.xy * _LabelScale;
@@ -191,14 +249,17 @@ Shader "GeoFoundry/Label"
                 clip.xy += offset * (2.0 / _ScreenParams.xy) * clip.w;
 
                 // Behind the camera, faded out or occluded: collapse the vertex outside the clip volume. Otherwise
-                // the whole quad gets one depth: the near plane (occlusion already tested, never cut) or the pulled
-                // anchor (tested per pixel against the depth buffer).
+                // the quad is drawn at the near plane (occlusion already tested) or at the ground plane through the
+                // anchor (hardware depth test, no depth texture).
                 if (clip.w <= 0.0 || fade <= 0.0)
                     clip = float4(0, 0, -2, 1);
                 else if (depthTexture)
                     clip.z = UNITY_NEAR_CLIP_VALUE * 0.9999 * clip.w;
+                else if (pulledCS.w > 0.0)
+                    clip.z = GroundPlaneDeviceDepth(clip.xy / clip.w, clip.z / clip.w, anchorWS,
+                        pulledCS.z / pulledCS.w) * clip.w;
                 else
-                    clip.z = pulledCS.z / pulledCS.w * clip.w;
+                    clip = float4(0, 0, -2, 1);
 
                 output.positionCS = clip;
                 output.uv = input.uv0;
