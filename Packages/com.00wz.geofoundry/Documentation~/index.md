@@ -2,6 +2,11 @@
 
 A Unity package for building 3D maps from MVT vector tiles and DEM elevation data. What gets built from the data is decided by layer handlers, so the package is not tied to a particular tile schema: a complete set of built-in handlers covers all layers of the OpenMapTiles schema (surfaces, roads, buildings, boundaries, labels and icons), and other schemas get their own handlers. Heavy computation runs on Burst and the Job System, including in WebGL builds.
 
+Local MVT and Terrarium DEM archives are available through PMTiles v3 sources;
+see [local-pmtiles.md](local-pmtiles.md) for setup, data preparation and the included
+development server. Web archives require HTTP Range; Unity's default Build and Run
+server does not meet that requirement in the tested version.
+
 > Status: in development. Working today: MVT and DEM tile loading, adaptive quadtree LOD with a memory budget, terrain elevation, the full OpenMapTiles layer set (surfaces, roads, buildings, boundaries, labels and icons), the camera and floating origin. See [CHANGELOG.md](../CHANGELOG.md) for the change history.
 
 ## Requirements

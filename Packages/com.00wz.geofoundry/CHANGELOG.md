@@ -11,6 +11,10 @@ Initial release.
 
 ### Added
 
+- Local PMTiles v3 MVT and Terrarium DEM sources, cancellable bounded byte-range reader,
+  None/Gzip support, Android StreamingAssets extraction and WebGL HTTP Range transport.
+  Includes a dependency-free Node development server and setup/data preparation documentation.
+
 - HTTP loading of MVT vector tiles and Terrarium DEM tiles: a shared limit on concurrent requests, retries with
   backoff, cancellation.
 - MVT parser producing a NativeArray representation for Burst jobs.
