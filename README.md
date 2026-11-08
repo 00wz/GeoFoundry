@@ -24,14 +24,15 @@ Or add this line to your project's `Packages/manifest.json`:
 ## Requirements
 
 - Unity 6000.4.8f1 and URP 17.4 — the tested version, also the minimum in `package.json`.
-- An MVT vector tile server (the built-in handlers expect the OpenMapTiles schema) and, for terrain elevation, a
-  Terrarium DEM tile server. The `MapCameraRig` camera requires the Input System package.
+- MVT PMTiles v3 data (the default) or a remote MVT tile service; the built-in handlers expect OpenMapTiles.
+  Terrarium DEM data is optional. Map archives are not included. WebGL PMTiles require a Range-capable server;
+  a lightweight development server is included. `MapCameraRig` requires the Input System package.
 
 See the [requirements in the documentation](Packages/com.00wz.geofoundry/Documentation~/index.md#requirements) for details.
 
 ## Quick start
 
-1. `Create → GeoFoundry → Config`: set the tile URLs and assign handlers (a ready-made set for the OpenMapTiles schema is in the package's `Presets/OpenMapTiles/`).
+1. `Create → GeoFoundry → Config`: the default **Local PMTiles** mode reads `Maps/vector.pmtiles` and `Maps/dem.pmtiles` from StreamingAssets; supply your own archives or change their paths. For tile services select **Remote HTTP** and set the URL templates. Assign handlers from `Presets/OpenMapTiles/` when using that schema.
 2. Add the `GeoFoundry → Map Bootstrapper` component to an empty GameObject at the origin and assign the config.
 3. Optionally add `GeoFoundry → Map Camera Rig` to the camera.
 

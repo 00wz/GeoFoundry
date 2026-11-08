@@ -14,7 +14,24 @@ Without these headers Burst jobs silently fall back to the main thread (everythi
 
 ## Local development
 
-`File → Build And Run` in Unity 6.4 — the built-in development server **sets the required headers itself**. No extra setup is needed: use the **Default** WebGL Template and enable threading (`Player Settings → Web → Native C/C++ Multithreading: ON`).
+Use the **Default** WebGL Template and enable threading
+(`Player Settings → Web → Native C/C++ Multithreading: ON`). For the default
+**Local PMTiles** mode, build first, then serve the output with the included
+development server (Node.js 18+, no npm dependencies):
+
+```powershell
+node Packages/com.00wz.geofoundry/Tools~/serve.mjs --root Build --port 8080
+```
+
+Open `http://127.0.0.1:8080/`. Adjust the script path to the package's filesystem
+location and `--root` to your build directory. The server provides isolation
+headers and HTTP Range. See [local-pmtiles.md](local-pmtiles.md#web-server-requirements)
+for archive hosting and CORS requirements.
+
+Unity 6.4's **Build And Run** server sets the isolation headers itself and can
+be used with **Remote HTTP** tile services. In tested 6000.4.8f1 it ignores
+archive Range requests, so it cannot serve local PMTiles despite advertising
+Accept-Ranges. A plain static server without working ranges is also insufficient.
 
 To check that cross-origin isolation is active, run in the browser console:
 

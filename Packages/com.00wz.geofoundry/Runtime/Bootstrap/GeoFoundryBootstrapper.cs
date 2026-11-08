@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using GeoFoundry.Core;
 using GeoFoundry.Core.Coordinates;
 using GeoFoundry.Core.Ground;
@@ -6,8 +5,6 @@ using GeoFoundry.Core.Handlers;
 using GeoFoundry.Core.Sources;
 using GeoFoundry.Core.TileSelection;
 using GeoFoundry.Ground;
-using GeoFoundry.TileIO.Net;
-using GeoFoundry.TileIO.Sources;
 using GeoFoundry.Tiles;
 using GeoFoundry.Tiles.Diagnostics;
 using GeoFoundry.Tiles.TileSelection;
@@ -44,9 +41,7 @@ namespace GeoFoundry.Bootstrap
         private TransformFloatingOriginController _originController;
         private GroundGridProvider _ownedGridProvider;
         private GroundGridHeightProvider _groundHeightProvider;
-        private TileDownloader _ownedDownloader;
-        private IVectorTileSource _ownedVectorSource;
-        private IDemTileSource _ownedDemSource;
+        private ConfiguredTileSources _ownedSources;
         private TileDebugOverlay _debugOverlay;
 
         private UnityEngine.Camera ViewCamera => _viewCamera != null ? _viewCamera : UnityEngine.Camera.main;
@@ -97,8 +92,8 @@ namespace GeoFoundry.Bootstrap
 
         /// <summary>
         /// Shuts the subsystem down, consumers before what they use (manager → terrain grids → sources).
-        /// Dispose cancels operations synchronously: when this method returns, no GeoFoundry HTTP requests are in
-        /// flight; builds waiting on a job finish releasing when the job completes. OnDisable runs before scene
+        /// Dispose requests cancellation before teardown; pending reads unwind and release their resources,
+        /// and builds waiting on a job finish releasing when the job completes. OnDisable runs before scene
         /// teardown on exiting Play Mode, before a domain reload and when the editor closes, so no editor event
         /// subscriptions are needed. Each step is isolated so that an exception in one still releases the rest;
         /// an uncancelled request would otherwise complete in the middle of scene teardown.
@@ -109,17 +104,13 @@ namespace GeoFoundry.Bootstrap
             DisposeSafely(_manager);
             DisposeSafely(_originController);
             DisposeSafely(_ownedGridProvider);
-            DisposeSafely(_ownedVectorSource as System.IDisposable);
-            DisposeSafely(_ownedDemSource as System.IDisposable);
-            DisposeSafely(_ownedDownloader);
+            DisposeSafely(_ownedSources);
 
             _manager              = null;
             _originController     = null;
             _ownedGridProvider    = null;
             _groundHeightProvider = null;
-            _ownedVectorSource    = null;
-            _ownedDemSource       = null;
-            _ownedDownloader      = null;
+            _ownedSources         = null;
         }
 
         private void DisposeSafely(System.IDisposable disposable)
@@ -179,13 +170,6 @@ namespace GeoFoundry.Bootstrap
                 return null;
             }
 
-            if (string.IsNullOrWhiteSpace(_config.VectorTilesEndpointTemplate))
-            {
-                Debug.LogError("[GeoFoundry] GeoFoundryBootstrapper: the vector tile URL is not set in Config " +
-                               "(VectorTilesEndpointTemplate).", this);
-                return null;
-            }
-
             if (_config.TerrainHandler == null)
             {
                 Debug.LogError("[GeoFoundry] GeoFoundryBootstrapper: the terrain handler is required: draped layers " +
@@ -202,30 +186,21 @@ namespace GeoFoundry.Bootstrap
                 return null;
             }
 
+            try { _ownedSources = ConfiguredTileSources.Create(_config); }
+            catch (System.Exception ex) when (ex is TileSourceException || ex is System.ArgumentException)
+            {
+                Debug.LogError($"[GeoFoundry] GeoFoundryBootstrapper: cannot create {_config.SourceMode} sources. {ex.Message}", this);
+                return null;
+            }
+
             var initialPivot = MercatorPivot.FromLonLat(_config.OriginLongitude, _config.OriginLatitude);
             _originController = new TransformFloatingOriginController(
                 initialPivot, viewCamera.transform, _config.FloatingOriginThresholdMeters);
 
-            // One downloader for all sources, so MaxConcurrentHttpRequests is a shared request limit.
-            // Sources do not own the downloader; OnDisable releases it after them.
-            _ownedDownloader = new TileDownloader(_config.MaxConcurrentHttpRequests);
-
-            // Vector source
-            var vectorSource = new HttpVectorTileSource(_config.VectorTilesEndpointTemplate, _ownedDownloader);
-            _ownedVectorSource = vectorSource;
-
             // Ground under the tiles: DEM relief or a flat plane.
-            bool relief = _config.EnableRelief && !string.IsNullOrEmpty(_config.DemTilesEndpointTemplate);
-            if (relief)
-            {
-                var demSource      = new HttpDemTileSource(_config.DemTilesEndpointTemplate, _ownedDownloader, _config.TileSizePixels);
-                _ownedDemSource    = demSource;
-                _ownedGridProvider = new DemGroundGridProvider(demSource, _config.TerrainGridResolution);
-            }
-            else
-            {
-                _ownedGridProvider = new FlatGroundGridProvider();
-            }
+            _ownedGridProvider = _ownedSources.Dem != null
+                ? new DemGroundGridProvider(_ownedSources.Dem, _config.TerrainGridResolution)
+                : new FlatGroundGridProvider();
             _groundHeightProvider = new GroundGridHeightProvider(_ownedGridProvider);
 
             // LOD traversal. Tile priorities come from the camera binding if there is one (IMapCameraBinding;
@@ -246,7 +221,7 @@ namespace GeoFoundry.Bootstrap
             // TileBuilder. An unassigned SO is compared with null via UnityEngine.Object so that a true null
             // is passed to the interface.
             var tileBuilder = new TileBuilder(
-                _ownedGridProvider, vectorSource,
+                _ownedGridProvider, _ownedSources.Vector,
                 _config.TerrainHandler != null ? _config.TerrainHandler : null,
                 registry, _config.LoadNeighborGrids);
 

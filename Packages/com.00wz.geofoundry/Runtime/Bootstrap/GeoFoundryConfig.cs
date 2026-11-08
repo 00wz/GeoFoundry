@@ -18,6 +18,15 @@ namespace GeoFoundry.Bootstrap
     public sealed class GeoFoundryConfig : ScriptableObject
     {
         [Header("Tile Sources")]
+        [Tooltip("Selects the source family for both MVT and DEM. Local PMTiles is the default; Web builds read archive URLs through HTTP Range.")]
+        public TileSourceMode SourceMode = TileSourceMode.LocalPmTiles;
+
+        [Tooltip("Required in Local PMTiles mode. Relative to StreamingAssets, or an absolute filesystem path/HTTP(S) archive URL. The package does not include map archives.")]
+        public string VectorArchivePath = "Maps/vector.pmtiles";
+
+        [Tooltip("Terrarium PNG PMTiles archive. Relative to StreamingAssets, or an absolute path/HTTP(S) URL. Leave empty for flat terrain.")]
+        public string DemArchivePath = "Maps/dem.pmtiles";
+
         [Tooltip("Required. URL template for vector MVT tiles with {z} {x} {y} placeholders, " +
                  "e.g. http://host:3000/moscow/{z}/{x}/{y} (martin).")]
         public string VectorTilesEndpointTemplate = "";
@@ -26,6 +35,9 @@ namespace GeoFoundry.Bootstrap
                  "http://host:8000/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=/dem/dem.tif&algorithm=terrarium " +
                  "(titiler). Leave empty for flat terrain without relief.")]
         public string DemTilesEndpointTemplate = "";
+
+        [Tooltip("Remote HTTP mode only: shared limit of concurrent requests across vector and DEM tile sources.")]
+        [Min(1)] public int MaxConcurrentHttpRequests = 6;
 
         [Header("LOD (adaptive quadtree)")]
         [Tooltip("Quadtree LOD traversal settings. The traversal references this instance, so changes apply live.")]
@@ -45,9 +57,6 @@ namespace GeoFoundry.Bootstrap
         public bool LoadNeighborGrids = false;
 
         [Header("Tile Loading and Budget")]
-        [Tooltip("Shared limit of concurrent HTTP requests across all sources (vector and DEM tiles).")]
-        [Min(1)] public int MaxConcurrentHttpRequests = 6;
-
         [Tooltip("Maximum number of tiles built at the same time, including cancelling builds.")]
         [Range(1, 16)] public int MaxConcurrentLoads = 4;
 
@@ -88,7 +97,8 @@ namespace GeoFoundry.Bootstrap
                  "the pivot is moved under the camera.")]
         [Min(1f)] public float FloatingOriginThresholdMeters = 1000f;
 
-        public int TileSizePixels = 256; 
+        [Tooltip("DEM tile width and height in pixels; must match the selected DEM source.")]
+        [Min(2)] public int TileSizePixels = 256;
 
         /// <summary>Returns the initial position as (longitude, latitude) in decimal degrees.</summary>
         public double2 GetOriginLonLat() => new double2(OriginLongitude, OriginLatitude);

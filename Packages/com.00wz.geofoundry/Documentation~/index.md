@@ -18,10 +18,11 @@ server does not meet that requirement in the tested version.
   supported on Web.
 - **Input System** — only for the `MapCameraRig` camera. Without it the package still works; the
   `GeoFoundry.CameraControl` assembly is simply not compiled.
-- **An MVT vector tile server** — for example, [martin](https://github.com/maplibre/martin). Any schema works; the
-  built-in handlers target OpenMapTiles (generated, for example, by [planetiler](https://github.com/onthegomap/planetiler)).
-- **A Terrarium PNG DEM tile server** — for terrain elevation, for example [titiler](https://github.com/developmentseed/titiler).
-  Without it the ground is flat.
+- **Map data** — supply an MVT PMTiles v3 archive (the default source mode), or an HTTP tile service such as
+  [Martin](https://github.com/maplibre/martin). The built-in handlers target OpenMapTiles; archives are not included.
+- **Elevation data, optional** — a Terrarium PNG PMTiles archive, or a matching HTTP service such as
+  [TiTiler](https://github.com/developmentseed/titiler). Without DEM the ground is flat. Local archives in WebGL
+  require a [Range-capable host](local-pmtiles.md#web-server-requirements).
 
 ## Quickstart
 
@@ -36,28 +37,30 @@ https://github.com/00wz/GeoFoundry.git?path=/Packages/com.00wz.geofoundry#v0.1.0
 `#v0.1.0` pins the version. A local copy of the package can be added with **Add package from disk** → `package.json`.
 Dependencies (Burst, Collections, Mathematics, URP — versions are listed in `package.json`) are installed automatically.
 
-### 2. Allow HTTP (if your tile servers use http://)
+### 2. Allow HTTP (if your data URLs use http://)
 
-Since Unity 2022, HTTP requests are blocked by default (`PlayerSettings.insecureHttpOption = NotAllowed`). If your martin/titiler servers are served over `http://` (intranet, local network), choose one of:
+Unity's HTTP transport follows `PlayerSettings.insecureHttpOption`. For HTTP archive URLs or remote tile
+services in Editor/native builds (intranet, local network), choose one of:
 
 - **Tools → GeoFoundry → Allow HTTP (Development Builds)** — HTTP in development builds and Editor Play Mode (recommended).
 - **Tools → GeoFoundry → Allow HTTP (Always — intranet only!)** — HTTP everywhere, including release builds.
 
-If you forget, the Console shows the error `Non-secure network connections disabled in Player Settings`.
+Otherwise Unity may report `Non-secure network connections disabled in Player Settings`. WebGL archive
+fetches also follow browser HTTPS, mixed-content and CORS policies; Unity's setting does not override them.
 
 ### 3. Configure the Web target
 
 For Web builds only:
 
 1. `Project Settings → Player → Web → Other Settings → Native C/C++ Multithreading = Enabled`.
-2. `Project Settings → Player → Web → Resolution and Presentation → WebGL Template = **Default**`. No custom template is needed for COOP/COEP — Build & Run in Unity 6.4 sets the headers itself. For production hosting, configure the server as described in [web-deployment.md](web-deployment.md).
+2. `Project Settings → Player → Web → Resolution and Presentation → WebGL Template = **Default**`. Host the build with COOP/COEP headers. For the default local PMTiles mode, use the [included Range server](local-pmtiles.md#included-development-server); Unity's Build and Run server sets the isolation headers but does not provide working PMTiles ranges in tested 6000.4.8f1. See [web-deployment.md](web-deployment.md) for production hosting.
 3. `Project Settings → Player → Web → Publishing Settings → Memory Size`: Initial ~256 MB, Maximum 2032 MB.
 
 `WebBuildValidator` logs a warning if threadsSupport is disabled or HTTP requests are blocked, and fails the build if the Burst package is missing or too old.
 
 ### 4. Create the config and the component
 
-1. `Create → GeoFoundry → Config` — create a `GeoFoundryConfig` ScriptableObject and set the URLs of your servers: `VectorTilesEndpointTemplate` (martin, required) and `DemTilesEndpointTemplate` (titiler; leave empty for flat terrain without relief — the terrain handler is still required). Both are empty by default — without a vector tile URL the bootstrapper does not start and logs an error to the Console. Example templates: `http://host:3000/moscow/{z}/{x}/{y}` (martin), `http://host:8000/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=/dem/dem.tif&algorithm=terrarium` (titiler).
+1. `Create → GeoFoundry → Config` — create a `GeoFoundryConfig` ScriptableObject. **Source Mode** defaults to **Local PMTiles**: supply `Assets/StreamingAssets/Maps/vector.pmtiles` and, for relief, `Maps/dem.pmtiles`, or change the archive paths in the Inspector. Data is not included. To use services instead, select **Remote HTTP** and set `VectorTilesEndpointTemplate` (required, e.g. `http://host:3000/region/{z}/{x}/{y}`) and `DemTilesEndpointTemplate` (optional Terrarium PNG URL). Both sources use the selected mode; disable relief or leave the selected DEM field empty for flat ground. See [local-pmtiles.md](local-pmtiles.md) for archive preparation and platform details.
 2. In the config, assign a terrain handler (required) and layer handlers (a ready-made set for the OpenMapTiles schema is in the package's `Presets/OpenMapTiles/`) and adjust the loading and memory limits if needed.
 3. Create an empty GameObject at the origin (no rotation or scale — tiles become its children), add the `GeoFoundry → Map Bootstrapper` component and assign the config to it. The camera is optional — `Camera.main` is used if none is set.
 
@@ -65,7 +68,7 @@ For Web builds only:
 
 ```
 GeoFoundry.Core           ← public API: coordinates and floating origin, MVT model and parser, all contracts
-GeoFoundry.TileIO         → Core                ← TileDownloader, HTTP MVT/DEM sources, Terrarium decoder
+GeoFoundry.TileIO         → Core                ← HTTP and PMTiles MVT/DEM sources, archive reader, Terrarium decoder
 GeoFoundry.Geometry       → Core                ← Burst geometry jobs, triangulation, projection, mesh building
 GeoFoundry.Ground         → Core                ← ground grids (from DEM or flat), terrain height
 GeoFoundry.Render         → Core, Geometry, URP ← schema-independent handlers, URP shaders
@@ -73,7 +76,7 @@ GeoFoundry.OpenMapTiles   → Core, Geometry, Render ← OpenMapTiles handlers, 
 GeoFoundry.Tiles          → Core, Ground        ← quadtree LOD, memory budget, tile lifecycle, debugging
 GeoFoundry.CameraControl  → Core, Input System  ← MapCameraRig; compiled only if Input System is installed
 GeoFoundry.Bootstrap      → Core, TileIO, Ground, Tiles ← GeoFoundryBootstrapper and GeoFoundryConfig
-GeoFoundry.Editor         ← Web build validator, Tools → GeoFoundry menu
+GeoFoundry.Editor         → Bootstrap           ← Config Inspector, Web build validator, Tools → GeoFoundry menu
 ```
 
 Implementations depend only on Core and know little about each other. Implementation details (Burst jobs, budget,

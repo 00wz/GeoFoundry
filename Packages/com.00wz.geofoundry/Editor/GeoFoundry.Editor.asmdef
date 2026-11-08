@@ -1,7 +1,7 @@
 {
     "name": "GeoFoundry.Editor",
     "rootNamespace": "GeoFoundry.Editor",
-    "references": [],
+    "references": ["GeoFoundry.Bootstrap"],
     "includePlatforms": [
         "Editor"
     ],

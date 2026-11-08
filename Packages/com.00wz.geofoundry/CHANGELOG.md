@@ -11,6 +11,9 @@ Initial release.
 
 ### Added
 
+- Configurable bootstrap sources: Local PMTiles (default) or Remote HTTP for both MVT and DEM,
+  with a mode-aware Config Inspector and optional DEM in either mode.
+
 - Local PMTiles v3 MVT and Terrarium DEM sources, cancellable bounded byte-range reader,
   None/Gzip support, Android StreamingAssets extraction and WebGL HTTP Range transport.
   Includes a dependency-free Node development server and setup/data preparation documentation.
