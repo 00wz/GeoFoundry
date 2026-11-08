@@ -14,6 +14,9 @@ namespace GeoFoundry.Tests.EditMode.OpenMapTiles
     /// <summary>Unit tests of the OpenMapTiles helpers and the coverage of the schema by the built-in handlers.</summary>
     public sealed class OmtCommonTests
     {
+        SamplePresetAssets _presets;
+        [OneTimeSetUp] public void ImportSamplePresets() => _presets = new SamplePresetAssets();
+        [OneTimeTearDown] public void DeleteTestPresets() => _presets?.Dispose();
         /// <summary>Layers of the OpenMapTiles 3.16 schema (openmaptiles.yaml).</summary>
         private static readonly string[] SchemaLayers =
         {
@@ -676,7 +679,7 @@ namespace GeoFoundry.Tests.EditMode.OpenMapTiles
                 "_fills", "_lines", "_outlines", "_areas", "_labels", "_points", "_names", "_shields", "_junctions",
                 "_onewayArrows",
             };
-            foreach (var path in System.IO.Directory.GetFiles("Packages/com.00wz.geofoundry/Presets/OpenMapTiles", "Omt*.asset"))
+            foreach (var path in System.IO.Directory.GetFiles(SamplePresetAssets.Template, "Omt*.asset"))
             {
                 var yaml = System.IO.File.ReadAllLines(path);
                 foreach (var list in lists)
@@ -705,7 +708,7 @@ namespace GeoFoundry.Tests.EditMode.OpenMapTiles
             foreach (var (name, priority) in expected)
             {
                 var material = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(
-                    $"Packages/com.00wz.geofoundry/Presets/OpenMapTiles/Materials/{name}.mat");
+                    $"{_presets.Root}/Materials/{name}.mat");
                 Assert.That(material, Is.Not.Null, name);
                 Assert.That(Mathf.RoundToInt(material.GetFloat("_QueueOffset")), Is.EqualTo(priority), name);
                 if (priority != OmtDrawOrder.Building)
@@ -745,7 +748,7 @@ namespace GeoFoundry.Tests.EditMode.OpenMapTiles
         public void DefaultTerrain_UsesAnOpaqueUrpShaderThatRendersFirst()
         {
             var material = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(
-                "Packages/com.00wz.geofoundry/Presets/OpenMapTiles/Materials/DefaultTerrain.mat");
+                _presets.Root + "/Materials/DefaultTerrain.mat");
             Assert.That(material, Is.Not.Null);
             Assert.That(material.shader, Is.Not.Null, "the terrain shader is missing");
             Assert.That(material.shader.name, Is.EqualTo("Universal Render Pipeline/Lit"));

@@ -10,10 +10,6 @@ styled after the official OSM OpenMapTiles style), and other schemas get their o
 - **Repository** — https://github.com/00wz/GeoFoundry
 - **Changelog** — [CHANGELOG.md](CHANGELOG.md)
 
-## License
-
-MIT — see [LICENSE.md](LICENSE.md). Some algorithms are based on [streets-gl](https://github.com/StrandedKitty/streets-gl)
-(MIT); it and other third-party sources are listed in [Third Party Notices.md](Third%20Party%20Notices.md). The
-OpenMapTiles presets include material under other licenses: the style tables and icons are derived from the
-OpenMapTiles style (CC-BY 4.0, icons based on OSM Carto, CC0) and the Noto Sans fonts are under the SIL Open Font
-License 1.1. Maps using the presets must credit `© OpenMapTiles © OpenStreetMap contributors`.
+Start with the [Innsbruck sample](Samples~/Innsbruck/README.md): a configured
+local map, terrain and editable preset copies imported through Package Manager.
+It requires Input System and includes regional map data.

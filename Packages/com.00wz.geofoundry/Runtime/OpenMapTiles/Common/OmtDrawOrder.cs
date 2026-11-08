@@ -7,7 +7,7 @@ namespace GeoFoundry.OpenMapTiles
     /// write depth, so the terrain hides layers behind hills regardless of priority. The draped layers are coplanar,
     /// so among themselves the render queue decides which covers which; the order follows the <c>order</c> of the
     /// official "OSM OpenMapTiles" style. Priorities are set on the material assets in the editor (see the presets
-    /// in <c>Presets/OpenMapTiles/Materials</c>); the handlers only warn in the inspector when an assigned material
+    /// in <c>Samples~/Innsbruck/Presets/OpenMapTiles/Materials</c>); the handlers only warn in the inspector when an assigned material
     /// deviates from this table.
     /// </summary>
     /// <remarks>

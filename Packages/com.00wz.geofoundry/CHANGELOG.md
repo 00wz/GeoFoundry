@@ -11,6 +11,11 @@ Initial release.
 
 ### Added
 
+- Importable Innsbruck sample: configured scene and regional PMTiles,
+  editable presets/materials, camera/URP settings, visible attribution and automatic data installation.
+  Mutable presets have one template in the sample; tests use isolated temporary imports.
+- PMTiles reads in EditMode now yield through the Editor synchronization context instead of waiting for a PlayerLoop frame.
+
 - Configurable bootstrap sources: Local PMTiles (default) or Remote HTTP for both MVT and DEM,
   with a mode-aware Config Inspector and optional DEM in either mode.
 
@@ -25,7 +30,7 @@ Initial release.
   and eviction.
 - Terrain elevation from DEM (or flat ground without it) and projection of layer geometry onto the ground grid.
 - A complete set of handlers for the OpenMapTiles 3.16 schema (`GeoFoundry.OpenMapTiles` assembly, assets in
-  `Presets/OpenMapTiles/`) covering all 16 layers: surfaces, waterways, roads and railways with casings, dashes,
+  `Samples~/Innsbruck/Presets/OpenMapTiles/`) covering all 16 layers: surfaces, waterways, roads and railways with casings, dashes,
   tunnels and bridges, boundaries, extruded buildings, and screen-space labels and icons (place, POI, house numbers,
   street names and shields, water names, peaks, airports) styled after the official "OSM OpenMapTiles" style; any
   other schema or layer is supported through custom `ILayerHandler`s.

@@ -2,8 +2,10 @@
 
 GeoFoundry loads MVT vector tiles and Terrarium PNG elevation tiles from PMTiles
 v3 archives. Each source uses one archive and reads only the required ranges.
-Map and elevation datasets are not included; supply archives with the schema,
-coverage and licence appropriate for your project.
+The [Innsbruck sample](../Samples~/Innsbruck/README.md) includes regional example archives.
+For other regions, supply archives with the schema and coverage appropriate for
+your project. Importing the sample
+automatically installs its data into the actual StreamingAssets root.
 
 ## Configure the bootstrapper
 
@@ -12,7 +14,8 @@ coverage and licence appropriate for your project.
 2. Leave **Source Mode → Local PMTiles**, the default. Place your MVT archive at
    `Assets/StreamingAssets/Maps/vector.pmtiles` and Terrarium DEM archive at
    `Assets/StreamingAssets/Maps/dem.pmtiles`, or change **Vector Archive Path**
-   and **Dem Archive Path** to match your files.
+   and **Dem Archive Path** to match your files. The configured Innsbruck sample
+   instead uses the isolated `GeoFoundry/Innsbruck` subdirectory.
 3. Assign the terrain and layer handlers as described in the
    [quickstart](index.md#4-create-the-config-and-the-component). The MVT layers
    must match the selected handlers; built-in handlers target OpenMapTiles.
@@ -204,9 +207,8 @@ pmtiles show moscow-dem.pmtiles
 ```
 
 Check a known elevation and tile dimensions before using a new DEM dataset.
-Preserve attribution/licences of the underlying map/elevation data and verify
-the output tiles before distributing them with your application. Preparation
-tools run outside Unity and are not runtime dependencies.
+Verify the output tiles before distributing them with your application.
+Preparation tools run outside Unity and are not runtime dependencies.
 
 ## Limits and verification
 

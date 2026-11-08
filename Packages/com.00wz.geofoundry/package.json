@@ -22,6 +22,13 @@
     "email": "pedaracha@gmail.com"
   },
   "license": "MIT",
+  "samples": [
+    {
+      "displayName": "Innsbruck",
+      "description": "A local PMTiles map with terrain, editable OpenMapTiles presets and camera controls. Requires Input System; see the sample README for setup.",
+      "path": "Samples~/Innsbruck"
+    }
+  ],
   "dependencies": {
     "com.unity.burst": "1.8.26",
     "com.unity.collections": "2.6.0",
@@ -29,6 +36,7 @@
     "com.unity.render-pipelines.universal": "17.4.0",
     "com.unity.modules.unitywebrequest": "1.0.0",
     "com.unity.modules.unitywebrequesttexture": "1.0.0",
-    "com.unity.modules.imageconversion": "1.0.0"
+    "com.unity.modules.imageconversion": "1.0.0",
+    "com.unity.modules.imgui": "1.0.0"
   }
 }

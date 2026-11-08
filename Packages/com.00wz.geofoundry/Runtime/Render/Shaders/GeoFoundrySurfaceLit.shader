@@ -17,11 +17,11 @@
 //     channels) stay those of the surface below.
 //
 // Usage: draped layer materials (water / park / landuse / landcover / custom fills). The terrain uses an opaque
-// depth-writing shader (URP Lit in Presets/OpenMapTiles/Materials/DefaultTerrain.mat) and renders first (Priority -50).
+// depth-writing shader (URP Lit in Samples~/Innsbruck/Presets/OpenMapTiles/Materials/DefaultTerrain.mat) and renders first (Priority -50).
 // IMPORTANT: for opaque materials, URP LitShader.ValidateMaterial forces renderQueue to 2000
 // (RenderQueue.Geometry) + _QueueOffset every time the material loads, ignoring the shader's Queue tag and
 // m_CustomRenderQueue in the .mat. The z-order between draped layers is therefore set ONLY through _QueueOffset
-// (Advanced Options → Priority, range ±50 in the inspector); see Packages/com.00wz.geofoundry/Presets/OpenMapTiles/Materials.
+// (Advanced Options → Priority, range ±50 in the inspector); see Packages/com.00wz.geofoundry/Samples~/Innsbruck/Presets/OpenMapTiles/Materials.
 // Buildings and other opaque geometry use "GeoFoundry/Building Lit" (offset 0, resulting queue 2000) and
 // render after the surfaces, on top of them.
 //

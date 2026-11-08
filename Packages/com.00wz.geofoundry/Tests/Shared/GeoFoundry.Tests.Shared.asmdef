@@ -1,0 +1,7 @@
+{
+    "name": "GeoFoundry.Tests.Shared",
+    "rootNamespace": "GeoFoundry.Tests",
+    "references": [],
+    "autoReferenced": false,
+    "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}

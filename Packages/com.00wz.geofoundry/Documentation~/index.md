@@ -18,13 +18,17 @@ server does not meet that requirement in the tested version.
   supported on Web.
 - **Input System** — only for the `MapCameraRig` camera. Without it the package still works; the
   `GeoFoundry.CameraControl` assembly is simply not compiled.
-- **Map data** — supply an MVT PMTiles v3 archive (the default source mode), or an HTTP tile service such as
-  [Martin](https://github.com/maplibre/martin). The built-in handlers target OpenMapTiles; archives are not included.
+- **Map data** — use the included [Innsbruck sample](../Samples~/Innsbruck/README.md), supply an MVT PMTiles v3 archive
+  (the default source mode), or use an HTTP tile service such as [Martin](https://github.com/maplibre/martin).
+  The built-in handlers target OpenMapTiles.
 - **Elevation data, optional** — a Terrarium PNG PMTiles archive, or a matching HTTP service such as
   [TiTiler](https://github.com/developmentseed/titiler). Without DEM the ground is flat. Local archives in WebGL
   require a [Range-capable host](local-pmtiles.md#web-server-requirements).
 
 ## Quickstart
+
+For a configured regional map, [import and set up the Innsbruck sample](../Samples~/Innsbruck/README.md).
+It includes its own editable presets and data. The steps below configure a map from scratch.
 
 ### 1. Install the package
 
@@ -42,8 +46,8 @@ Dependencies (Burst, Collections, Mathematics, URP — versions are listed in `p
 Unity's HTTP transport follows `PlayerSettings.insecureHttpOption`. For HTTP archive URLs or remote tile
 services in Editor/native builds (intranet, local network), choose one of:
 
-- **Tools → GeoFoundry → Allow HTTP (Development Builds)** — HTTP in development builds and Editor Play Mode (recommended).
-- **Tools → GeoFoundry → Allow HTTP (Always — intranet only!)** — HTTP everywhere, including release builds.
+- **Player Settings → Other Settings → Allow downloads over HTTP → Development Only** for development builds and Editor Play Mode.
+- **Always Allowed** for an application that intentionally uses HTTP in release builds.
 
 Otherwise Unity may report `Non-secure network connections disabled in Player Settings`. WebGL archive
 fetches also follow browser HTTPS, mixed-content and CORS policies; Unity's setting does not override them.
@@ -60,8 +64,8 @@ For Web builds only:
 
 ### 4. Create the config and the component
 
-1. `Create → GeoFoundry → Config` — create a `GeoFoundryConfig` ScriptableObject. **Source Mode** defaults to **Local PMTiles**: supply `Assets/StreamingAssets/Maps/vector.pmtiles` and, for relief, `Maps/dem.pmtiles`, or change the archive paths in the Inspector. Data is not included. To use services instead, select **Remote HTTP** and set `VectorTilesEndpointTemplate` (required, e.g. `http://host:3000/region/{z}/{x}/{y}`) and `DemTilesEndpointTemplate` (optional Terrarium PNG URL). Both sources use the selected mode; disable relief or leave the selected DEM field empty for flat ground. See [local-pmtiles.md](local-pmtiles.md) for archive preparation and platform details.
-2. In the config, assign a terrain handler (required) and layer handlers (a ready-made set for the OpenMapTiles schema is in the package's `Presets/OpenMapTiles/`) and adjust the loading and memory limits if needed.
+1. `Create → GeoFoundry → Config` — create a `GeoFoundryConfig` ScriptableObject. **Source Mode** defaults to **Local PMTiles**: supply `Assets/StreamingAssets/Maps/vector.pmtiles` and, for relief, `Maps/dem.pmtiles`, or change the archive paths in the Inspector. These default paths require your own archives; the imported Innsbruck sample has its own configured paths. To use services instead, select **Remote HTTP** and set `VectorTilesEndpointTemplate` (required, e.g. `http://host:3000/region/{z}/{x}/{y}`) and `DemTilesEndpointTemplate` (optional Terrarium PNG URL). Both sources use the selected mode; disable relief or leave the selected DEM field empty for flat ground. See [local-pmtiles.md](local-pmtiles.md) for archive preparation and platform details.
+2. In the config, assign a terrain handler (required) and layer handlers (import Innsbruck for the OpenMapTiles presets) and adjust the loading and memory limits if needed.
 3. Create an empty GameObject at the origin (no rotation or scale — tiles become its children), add the `GeoFoundry → Map Bootstrapper` component and assign the config to it. The camera is optional — `Camera.main` is used if none is set.
 
 ## Architecture (asmdef layers)
@@ -76,7 +80,7 @@ GeoFoundry.OpenMapTiles   → Core, Geometry, Render ← OpenMapTiles handlers, 
 GeoFoundry.Tiles          → Core, Ground        ← quadtree LOD, memory budget, tile lifecycle, debugging
 GeoFoundry.CameraControl  → Core, Input System  ← MapCameraRig; compiled only if Input System is installed
 GeoFoundry.Bootstrap      → Core, TileIO, Ground, Tiles ← GeoFoundryBootstrapper and GeoFoundryConfig
-GeoFoundry.Editor         → Bootstrap           ← Config Inspector, Web build validator, Tools → GeoFoundry menu
+GeoFoundry.Editor         → Bootstrap           ← Config Inspector, Web build validator
 ```
 
 Implementations depend only on Core and know little about each other. Implementation details (Burst jobs, budget,
@@ -121,8 +125,7 @@ building UVs are in meters: set the texture density with the material's Tiling.
 ## OpenMapTiles handlers
 
 The package ships a complete set of handlers for the [OpenMapTiles](https://openmaptiles.org/schema/) 3.16 schema
-(assembly `GeoFoundry.OpenMapTiles`, namespace `GeoFoundry.OpenMapTiles`), with ready-made assets in
-`Presets/OpenMapTiles/`. Every layer of the schema has a handler, and every attribute that carries rendering
+(assembly `GeoFoundry.OpenMapTiles`, namespace `GeoFoundry.OpenMapTiles`), with ready-made presets in the Innsbruck sample. Every layer of the schema has a handler, and every attribute that carries rendering
 information is read. The default look follows the official "OSM OpenMapTiles" style (colors, widths, casings, dashes,
 icons, label fonts, zoom ranges, filters and draw order), never shows a class before the schema puts it into the
 tiles, and every table is editable in the inspector of the handler asset. The audit of the defaults against the schema
@@ -149,7 +152,10 @@ and the style is in [omt-schema-audit.md](omt-schema-audit.md).
 
 ### Setup
 
-Add the assets from `Presets/OpenMapTiles/` (the `Omt*` handlers and `Terrain`) to `GeoFoundryConfig.LayerHandlers`
+Use `Presets/OpenMapTiles/` from the imported Innsbruck sample. It is the only
+mutable preset template; tests validate that unimported template through temporary
+isolated imports, leaving your customized copy untouched.
+Assign the copied `Omt*` handlers and `Terrain` to `GeoFoundryConfig.LayerHandlers`
 / `TerrainHandler`. `OmtTextSettings` is shared by all label-producing handlers: it holds the fonts (Noto Sans
 Regular/Bold/Italic are included), the name language preference (`name:en`, `name` by default; put e.g. `name:ru`
 first for Russian names), the label and icon materials and the icon atlas (`OmtIconAtlas`, built from the style's
@@ -162,10 +168,9 @@ and label decluttering and the building fade depend on how large tiles appear on
 
 ### Attribution
 
-The default look is derived from the OpenMapTiles style (CC-BY 4.0) and OpenMapTiles data comes from OpenStreetMap
-(ODbL), so an application showing the map must display a visible credit, for example
-`© OpenMapTiles © OpenStreetMap contributors` in a corner of the screen. GeoFoundry does not draw it for you. See
-[Third Party Notices.md](../Third%20Party%20Notices.md) for the licenses of the bundled style tables, icons and fonts.
+The Innsbruck scene includes visible map and terrain credits. For a custom scene,
+add your own credits, for example `© OpenMapTiles © OpenStreetMap contributors`
+in a corner of the screen.
 
 ### Rebuilding the icon atlas
 
@@ -382,7 +387,3 @@ bootstrapper.TileLoadFailed += (coord, error) =>
 `Window → General → Test Runner` → EditMode/PlayMode → Run All.
 
 The tests do not access external networks: the downloader is tested against a local HTTP server (`LoopbackHttpServer`), everything else against test doubles of the sources.
-
-## License
-
-MIT — see [LICENSE.md](../LICENSE.md). Some algorithms are based on [streets-gl](https://github.com/StrandedKitty/streets-gl) (MIT); it and other third-party sources are listed in [Third Party Notices.md](../Third%20Party%20Notices.md).

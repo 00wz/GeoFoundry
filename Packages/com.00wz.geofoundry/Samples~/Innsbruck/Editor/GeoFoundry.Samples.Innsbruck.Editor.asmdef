@@ -1,0 +1,7 @@
+{
+    "name": "GeoFoundry.Samples.Innsbruck.Editor",
+    "rootNamespace": "GeoFoundry.Samples.Innsbruck.Editor",
+    "references": [],
+    "includePlatforms": ["Editor"],
+    "autoReferenced": true
+}

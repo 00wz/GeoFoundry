@@ -22,7 +22,10 @@ namespace GeoFoundry.Tests.PlayMode.OpenMapTiles
     /// </summary>
     public sealed class OmtPresetHandlerTests
     {
-        private const string Presets = "Packages/com.00wz.geofoundry/Presets/OpenMapTiles/";
+        static SamplePresetAssets _presets;
+        static string Presets => _presets.Root + "/";
+        [OneTimeSetUp] public void ImportSamplePresets() => _presets = new SamplePresetAssets();
+        [OneTimeTearDown] public void DeleteTestPresets() => _presets?.Dispose();
         private static readonly TileCoord Coord = new TileCoord(14, 9903, 5145);
         private static readonly MercatorPivot Frame = MercatorPivot.FromLonLat(37.6, 55.75);
 

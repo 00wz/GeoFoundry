@@ -43,7 +43,7 @@ namespace GeoFoundry.TileIO.PmTiles
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _lifetime.Token);
             ct = linked.Token;
             ct.ThrowIfCancellationRequested();
-            while (_busy) await Awaitable.NextFrameAsync(ct);
+            while (_busy) await YieldAsync(ct);
             ct.ThrowIfCancellationRequested();
             _busy = true;
             try
@@ -189,7 +189,7 @@ namespace GeoFoundry.TileIO.PmTiles
                 for (int i = 0; i < n; i++)
                     crc = (crc >> 8) ^ CrcTable[(crc ^ buffer[i]) & 255];
                 sinceYield += n;
-                if (sinceYield >= 262144) { sinceYield = 0; await Awaitable.NextFrameAsync(ct); }
+                if (sinceYield >= 262144) { sinceYield = 0; await YieldAsync(ct); }
             }
             ct.ThrowIfCancellationRequested();
             if (~crc != U32(bytes, bytes.Length - 8) || (uint)output.Length != U32(bytes, bytes.Length - 4))
@@ -203,6 +203,20 @@ namespace GeoFoundry.TileIO.PmTiles
             if (offset < 127 || offset > long.MaxValue || length > long.MaxValue - offset)
                 throw new PmTilesException("Invalid PMTiles section offsets.");
             if (_source.Length >= 0) CheckRange(offset, length, (ulong)_source.Length, "archive");
+        }
+        static async Awaitable YieldAsync(CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+#if UNITY_EDITOR
+            // EditMode tools/tests do not have a normal PlayerLoop frame schedule.
+            if (!Application.isPlaying)
+            {
+                await System.Threading.Tasks.Task.Yield();
+                ct.ThrowIfCancellationRequested();
+                return;
+            }
+#endif
+            await Awaitable.NextFrameAsync(ct);
         }
         static void CheckRange(ulong offset, ulong length, ulong total, string name)
         {

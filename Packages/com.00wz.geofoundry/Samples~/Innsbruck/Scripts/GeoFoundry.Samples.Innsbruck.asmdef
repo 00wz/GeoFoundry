@@ -1,0 +1,6 @@
+{
+    "name": "GeoFoundry.Samples.Innsbruck",
+    "rootNamespace": "GeoFoundry.Samples.Innsbruck",
+    "references": [],
+    "autoReferenced": true
+}

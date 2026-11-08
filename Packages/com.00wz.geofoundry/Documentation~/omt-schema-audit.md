@@ -81,7 +81,7 @@ bridges), boundary 203–205, labels 206–256.
 | D-4 | ParkOutline | −24, above roads and boundaries | 55–56, below aeroway lines and roads | −40 |
 | D-5 | AerowayLines | −35 | 57–58 | −38 |
 | D-6 | LanduseOutline | −43, below water | 60–61, above water, park and aeroway lines | −36 |
-| D-7 | Unchanged | Terrain −50, Landuse −48, AerowayFill −47, Landcover −46, LandcoverOutline −45, TransportationAreas −32, Transportation −30, WaterwayBridges −28, MountainLines −27, Boundary −26, Building 0 | — | Material `_QueueOffset` and `m_CustomRenderQueue` of `Presets/OpenMapTiles/Materials` updated with D-1…D-6 |
+| D-7 | Unchanged | Terrain −50, Landuse −48, AerowayFill −47, Landcover −46, LandcoverOutline −45, TransportationAreas −32, Transportation −30, WaterwayBridges −28, MountainLines −27, Boundary −26, Building 0 | — | Material `_QueueOffset` and `m_CustomRenderQueue` of `Samples~/Innsbruck/Presets/OpenMapTiles/Materials` updated with D-1…D-6 |
 
 Not reproducible: stadium/pitch between land cover classes (21–22), and river bridges between rail and road bridges
 (transportation is one mesh; the bridge mesh stays above all roads).

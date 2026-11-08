@@ -52,3 +52,4 @@
 *.ogg binary
 *.mp4 binary
 *.bytes binary
+*.pmtiles binary

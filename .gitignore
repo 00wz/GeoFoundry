@@ -3,6 +3,12 @@
 # Get latest from https://github.com/github/gitignore/blob/main/Unity.gitignore
 #
 .utmp/
+# Imported copy for this package's authoring project; the template is in Samples~.
+/Assets/Samples/GeoFoundry/
+/Assets/Samples/GeoFoundry.meta
+/Assets/Samples.meta
+/Assets/StreamingAssets/GeoFoundry/
+/Assets/StreamingAssets/GeoFoundry.meta
 /[Ll]ibrary/
 /[Tt]emp/
 /[Oo]bj/

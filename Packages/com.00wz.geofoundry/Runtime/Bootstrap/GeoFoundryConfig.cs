@@ -21,7 +21,7 @@ namespace GeoFoundry.Bootstrap
         [Tooltip("Selects the source family for both MVT and DEM. Local PMTiles is the default; Web builds read archive URLs through HTTP Range.")]
         public TileSourceMode SourceMode = TileSourceMode.LocalPmTiles;
 
-        [Tooltip("Required in Local PMTiles mode. Relative to StreamingAssets, or an absolute filesystem path/HTTP(S) archive URL. The package does not include map archives.")]
+        [Tooltip("Required in Local PMTiles mode. Relative to StreamingAssets, or an absolute filesystem path/HTTP(S) archive URL. Import the Innsbruck sample or supply your own archives.")]
         public string VectorArchivePath = "Maps/vector.pmtiles";
 
         [Tooltip("Terrarium PNG PMTiles archive. Relative to StreamingAssets, or an absolute path/HTTP(S) URL. Leave empty for flat terrain.")]

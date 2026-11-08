@@ -14,7 +14,8 @@
         "GeoFoundry.Bootstrap",
         "Unity.Burst",
         "Unity.Collections",
-        "Unity.Mathematics"
+        "Unity.Mathematics",
+        "GeoFoundry.Tests.Shared"
     ],
     "includePlatforms": [
         "Editor"

@@ -10,7 +10,7 @@ namespace GeoFoundry.Editor.Build
     /// Build pre-processor for the Web target.
     /// Fails the build (<see cref="BuildFailedException"/>) when the Burst package is missing or older than
     /// the required version. Warns when <c>PlayerSettings.WebGL.threadsSupport</c> is off (Burst jobs then run
-    /// on the main thread) or when HTTP requests are blocked.
+    /// on the main thread).
     /// </summary>
     internal sealed class WebBuildValidator : IPreprocessBuildWithReport
     {
@@ -26,19 +26,6 @@ namespace GeoFoundry.Editor.Build
 
             ValidateThreadsSupport();
             ValidateBurstPackage();
-            ValidateHttpInsecureOption();
-        }
-
-        private static void ValidateHttpInsecureOption()
-        {
-            // Warning only: the package user may have switched the endpoints to HTTPS.
-            if (PlayerSettings.insecureHttpOption == InsecureHttpOption.NotAllowed)
-            {
-                Debug.LogWarning(
-                    "[GeoFoundry] PlayerSettings.insecureHttpOption = NotAllowed — HTTP requests will be blocked. " +
-                    "If your martin/titiler endpoints use HTTP, enable Tools → GeoFoundry → Allow HTTP (Development Builds), " +
-                    "otherwise tiles will not load.");
-            }
         }
 
         private static void ValidateThreadsSupport()

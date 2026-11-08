@@ -25,14 +25,24 @@ Or add this line to your project's `Packages/manifest.json`:
 
 - Unity 6000.4.8f1 and URP 17.4 — the tested version, also the minimum in `package.json`.
 - MVT PMTiles v3 data (the default) or a remote MVT tile service; the built-in handlers expect OpenMapTiles.
-  Terrarium DEM data is optional. Map archives are not included. WebGL PMTiles require a Range-capable server;
+  Terrarium DEM data is optional. The Innsbruck sample includes regional archives.
+  WebGL PMTiles require a Range-capable server;
   a lightweight development server is included. `MapCameraRig` requires the Input System package.
 
 See the [requirements in the documentation](Packages/com.00wz.geofoundry/Documentation~/index.md#requirements) for details.
 
 ## Quick start
 
-1. `Create → GeoFoundry → Config`: the default **Local PMTiles** mode reads `Maps/vector.pmtiles` and `Maps/dem.pmtiles` from StreamingAssets; supply your own archives or change their paths. For tile services select **Remote HTTP** and set the URL templates. Assign handlers from `Presets/OpenMapTiles/` when using that schema.
+For a configured example, [import the Innsbruck sample](Packages/com.00wz.geofoundry/Samples~/Innsbruck/README.md)
+through Package Manager, wait for import to finish, open its scene and press Play.
+Data is installed automatically. Its imported presets are editable; tests check the package template.
+
+The repository's authoring scene also uses these presets. Import the sample
+before opening `Assets/Scenes/SampleScene.unity`; existing preset GUIDs are preserved.
+
+For a map from scratch:
+
+1. `Create → GeoFoundry → Config`: the default **Local PMTiles** mode reads `Maps/vector.pmtiles` and `Maps/dem.pmtiles` from StreamingAssets; supply your own archives or change their paths. For tile services select **Remote HTTP** and set the URL templates. Import Innsbruck for editable OpenMapTiles presets.
 2. Add the `GeoFoundry → Map Bootstrapper` component to an empty GameObject at the origin and assign the config.
 3. Optionally add `GeoFoundry → Map Camera Rig` to the camera.
 
@@ -45,9 +55,3 @@ The repository is a Unity project for developing the package. The package itself
 [`Packages/com.00wz.geofoundry`](Packages/com.00wz.geofoundry): code, tests (EditMode and PlayMode),
 default handlers and documentation. The rest is the host project: the `Assets/Scenes/SampleScene.unity` scene
 and URP settings.
-
-## License
-
-MIT — see [LICENSE](LICENSE). Some algorithms are based on [streets-gl](https://github.com/StrandedKitty/streets-gl)
-(MIT); it and other third-party sources are listed in
-[Third Party Notices](Packages/com.00wz.geofoundry/Third%20Party%20Notices.md).

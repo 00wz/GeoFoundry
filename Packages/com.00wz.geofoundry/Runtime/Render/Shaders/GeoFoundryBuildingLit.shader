@@ -10,7 +10,7 @@
 // Unlike "GeoFoundry/Surface Lit", there are no Queue/ZTest changes: buildings render in normal depth order
 // (queue 2000), after the surfaces and on top of them.
 //
-// Usage: the building material (Packages/com.00wz.geofoundry/Presets/OpenMapTiles/Materials/DefaultBuilding.mat)
+// Usage: the building material (Packages/com.00wz.geofoundry/Samples~/Innsbruck/Presets/OpenMapTiles/Materials/DefaultBuilding.mat)
 // and any building material that needs per-vertex color.
 // ============================================================================
 Shader "GeoFoundry/Building Lit"
