@@ -12,8 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6a300923a028909478639f8ef10b0f5e, type: 3}
   m_Name: GeoFoundryConfig
   m_EditorClassIdentifier: GeoFoundry.Bootstrap::GeoFoundry.Bootstrap.GeoFoundryConfig
+  SourceMode: 0
+  VectorArchivePath: Maps/vector.pmtiles
+  DemArchivePath: Maps/dem.pmtiles
   VectorTilesEndpointTemplate: http://192.168.253.55:3000/planet/{z}/{x}/{y}
   DemTilesEndpointTemplate: http://192.168.253.55:3000/dem/{z}/{x}/{y}
+  MaxConcurrentHttpRequests: 16
   Lod:
     MaxTileScreenSizePixels: 1000
     MaxZoom: 14
@@ -39,14 +43,13 @@ MonoBehaviour:
   - {fileID: 11400000, guid: d6331a04ae09425183e6dadad9af43db, type: 2}
   - {fileID: 11400000, guid: b6a6202ca8d94ab59da8e0dac7dd6cc4, type: 2}
   LoadNeighborGrids: 1
-  MaxConcurrentHttpRequests: 16
   MaxConcurrentLoads: 16
   GpuBudgetMB: 512
   HeapBudgetMB: 256
-  OriginLongitude: 37.6175
-  OriginLatitude: 55.752
+  OriginLongitude: 11.4041
+  OriginLatitude: 47.2692
   OriginCameraDistance: 12000
   TerrainGridResolution: 32
   EnableRelief: 1
   FloatingOriginThresholdMeters: 6000
-  TileSizePixels: 64
+  TileSizePixels: 128
