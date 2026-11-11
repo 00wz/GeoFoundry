@@ -7,6 +7,7 @@ styled after the official OSM OpenMapTiles style), and other schemas get their o
 
 - **Documentation** — [Documentation~/index.md](Documentation~/index.md): requirements, installation, setup, Web builds,
   extension points, diagnostics.
+- **Runtime architecture** — [Mermaid diagram and component guide](Documentation~/architecture.md).
 - **Repository** — https://github.com/00wz/GeoFoundry
 - **Changelog** — [CHANGELOG.md](CHANGELOG.md)
 

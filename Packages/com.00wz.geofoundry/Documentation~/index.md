@@ -70,6 +70,9 @@ For Web builds only:
 
 ## Architecture (asmdef layers)
 
+See [Runtime architecture](architecture.md) for a Mermaid dependency diagram, component responsibilities,
+built-in implementations, extension points and bootstrapper wiring.
+
 ```
 GeoFoundry.Core           ← public API: coordinates and floating origin, MVT model and parser, all contracts
 GeoFoundry.TileIO         → Core                ← HTTP and PMTiles MVT/DEM sources, archive reader, Terrarium decoder
